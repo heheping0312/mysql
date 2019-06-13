@@ -1,0 +1,428 @@
+#!/bin/bash
+
+存储过程概述
+  存储过程介绍
+      什么存储过程
+	– 数据库中保存的一系列 sql 命令的集合
+	– 编写存储过程时,可以使用变量、条件判断、流程控制等
+	– 存储过程,就是 MySQL 中的脚本
+  存储过程优点
+      	– 提高性能
+	– 可减轻网络负担
+	– 可以防止对表的直接访问
+	– 避免重复编写sql 操作
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+基本使用
+  创建存储过程	存储过程创建一定要创建在库里
+      	delimiter //		#delimiter 关键字指定存储过程的分隔符(默认为;)
+   	create procedure 名称()
+	begin
+	功能代码
+	.....
+	end
+	//	#结束存储过程
+	delimiter ;		#把分隔符改回";",要有空格
+      MySQL 默认以“ ;” 为分隔符,没有声明分割符,编译器会把存储过程当成 SQL 语句进行处理,则存储过程的编译过程会报错。
+
+模具：（结构）
+delimiter //
+create procedure p1()
+begin
+  ......
+end
+//
+delimiter ;
+call p1();
+
+例：
+mysql> dilimiter //
+    -> ^C
+mysql> delimiter //
+mysql> create procedure p1()
+    -> begin
+    -> select * from db9.user;
+    -> end
+    -> //
+mysql> delimiter ;
+mysql> call p1()
+
+  查看存储过程
+	• 方法 1
+	– show procedure status;
+	• 方法 2
+	– select db,name,type from mysql.proc where name=“"存储过程名 ";
+
+mysql> select db,name,type from mysql.proc where type="procedure";
+mysql> select body from mysql.proc where name="p2"\G;
+*************************** 1. row ***************************
+body: begin select * from db9.user limit 10; end
+
+mysql> show procedure status\G;		#太多了  使用不方便
+
+  调用 / 删除存储过程
+      调用存储过程
+	– Call 存储过程名 ();
+	  存储过程没有参数时, () 可以省略，有参数时,在调用存储过程时,必须传参。
+      删除存储过程
+	– drop procedure 存储过程名;	
+
+mysql> drop procedure p2;
+Query OK, 0 rows affected (0.00 sec)
+
+案例 :创建存储过程
+   满足以下要求:
+	– 存储过程名称为 p1
+	– 功能显示 user 表中 shell 是 /bin/bash 的用户个数
+	– 调用存储过程 p1
+delimiter //
+create procedure p1()
+begin
+  select count(*) from db9.user where shell="/bin/bash";
+end
+//
+delimiter ;
+call p1();
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+存储过程进阶
+  变量类型
+        +----------+-----------------------------------------------------------------------+
+        |   变量   |              描述                                                     |
+        +----------+-----------------------------------------------------------------------+
+        | 会话变量 | 会话变量和全局变量叫系统变量，使用set命令定义全局变量的修改会影响     |
+        +----------+ 到整个服务器，但是对会话变量的修改，只会影响到当前的会话		   |
+        | 全局变量 | select @@hostname;							   |
+        +----------+----------------+------------------------------------------------------+
+        | 用户变量 |  在客户端连接到数据库服务的整个过程中都时有效的。当当前连接断开后     |
+	|	   |  所有用户变量失效。定义set  @变量=值;输出select @变量名	           |
+        +----------+----------------+------------------------------------------------------+
+        | 局部变量 |  存储过程中的begin/end。其有效范围仅限于该语句块中，语句块执行完毕    |
+	|	   |  后，变量失效。declare专门用来定义局部变量				   |                
+        +----------+-----------------------------------------------------------------------+
+	| 注意：局部变量 和 参数变量调用时 变量名前不需要加@				   |
+	+----------------------------------------------------------------------------------+
+
+mysql> show global variables;				#查看全局变量
+mysql> show session variables;				#查看会话变量
+mysql> set session sort_buffer_size = 40000;		#设置会话变量
+mysql> show session variables like "sort_buffer_size";	#查看会话变量
+mysql> set @x = 88;					#用户自定义变量，直接赋值
+mysql> select @x;
+mysql> show global variables like "%关键字";		#查看全局变量
+mysql> select max(uid) into @y from user;		#使用sql命令查询结果赋值
+
+delimiter //
+create procedure p3()
+begin
+  declare x int(2) default 1;				#局部变量x
+  declare y char(20);					#局部变量y
+  set y = "bob";
+  select x;
+  select y;
+end
+//
+delimiter ;
+call p3();
+--------------------------------------------------------------------------
+  算数运算
+      算数运算符号
+	符号	  描述			例子
+	+ 	加法运算 	SET @var1=2+2;		4
+	- 	减法运算 	SET @var2=3-2;   	1
+	* 	乘法运算 	SET @var3=3*2 ;  	6
+	/ 	除法运算 	SET @var4=10/3; 	3.333333333
+	DIV 	整除运算 	SET @var5=10 DIV 3; 	3
+	%	取模 		SET @var6=10%3 ; 	1
+-----------------------------------------------------------------------------
+mysql> set @sum = 1 + 88;select @sum;
++------+
+| @sum |
++------+
+|   89 |
++------+
+mysql> set @x = 55; set @y=66;set @z = @x + @y; select @z;	#加法运算
++------+
+| @z   |
++------+
+|  121 |
++------+
+mysql> set @x = 5; set @y=6;set @z = @x * @y; select @z;	#乘法运算
++------+
+| @z   |
++------+
+|   30 |
++------+
+mysql> set @x = 5; set @y=6;set @z = @x / @y; select @z;	#除法运算
++-------------+
+| @z          |
++-------------+
+| 0.833333333 |
++-------------+
+mysql> set @x = 5; set @y=6;set @z = @x % @y; select @z;	#取模
++------+
+| @z   |
++------+
+|    5 |
++------+
+mysql> set @x = 5; set @y=6;set @z = @x - @y; select @z;	#减法运算
++------+
+| @z   |
++------+
+|   -1 |
++------+
+mysql> set @x = 5; set @y=6;set @z = @x DIV @y; select @z;	#整除运算
++------+
+| @z   |
++------+
+|    0 |
++------+
+----------------------------------------------------------------------
+delimiter //
+create procedure p4()
+begin
+  declare x int(2);
+  declare y int(2);
+  declare z int(2);
+  select count(name) into x from db9.user where shell="/bin/bash";
+  select count(name) into y from db9.user where shell="/sbin/nologin";
+  set z = x + y;
+  select x,y,z;
+end
+//
+delimiter ;
+call p4();
+--------------------------------------------------------------------
+
+  参数类型
+    MySQL 存储过程,共有三种参数类型 IN,OUT,INOUT
+	Create procedure 名称 (
+	 类型 参数名 数据类型,
+	 类型 参数名 数据类型
+	)
+	+-------+----------------+------------------------------------------------------+
+	|关键字 |      名称	 |		描述					|
+	+-------+----------------+------------------------------------------------------+
+	| in    |    输入参数	 |  作用是给存储过程传值,必须在调用存储过程时赋值,	|
+	|	|		 | 在存储过程中该参数的值不允许修改;默认类型是 in	|
+	+-------+----------------+------------------------------------------------------+
+	| out   |    输出参数	 |  该值可在存储过程内部被改变,并可返回。		|
+	+-------+----------------+------------------------------------------------------+
+	| inout |  输入/输出参数 |  调用时指定,并且可被改变和返回			|
+	+-------+----------------+------------------------------------------------------+
+	|  注意:此三中类型的变量在存储过程中调用时不需要加 @ 符号 !!!			|
+	+-------------------------------------------------------------------------------+
+
+delimiter //
+create procedure p5( sname char(25))
+begin
+  declare x int(2);
+  select count(name) into x from db9.user where shell=sname;
+  select x;
+end
+//
+delimiter ;
+call p5(/bin/bash);
+----------------------------------------------------------
+delimiter //
+create procedure p6( out usernum int(2))
+begin
+  select count(name) into usernum from db9.user;
+  select usernum;
+end
+//
+delimiter ;
+call p6(@x);
+------------------------------------------------------------
+delimiter //
+create procedure p7( inout num int(2))
+begin
+  select num ;
+  select count(name) into num  from db9.user where uid <= 1000;
+  select num;
+end
+//
+delimiter ;
+call p7(@x);
+
+###############################################################################################################
+
+流程控制
+  选择结构
+      单分支
+       当"条件成立"时执行命令序列;否则,不执行任何操作
+	if 条件测试 then
+	代码......
+	.....
+	end if ;
+      双分支
+       当"条件成立"时执行代码1；否则,执行代码2
+	if 条件测试 then
+	代码 1 ......
+	.....
+	else
+	代码 2......
+	.....
+	end if;	
+-----------------------------------------------------------
+delimiter //
+create procedure p9( in x int(2))
+begin
+  if x is not null  then
+  select *   from db9.user where id = x;
+  else
+  select *   from db9.user where id = 1;
+  end if;
+end
+//
+delimiter ;
+call p9(3);
+mysql> call p9(null);
+------------------------------------------------------------
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  循环结构
+      条件式循环
+	– 反复测试条件,
+	– 只要成立就执行命令序列
+	while 条件判断 do
+	循环体
+	.......
+	end while;
+
+-------------------------------------------------------------
+
+delimiter //
+create procedure p12()
+begin
+  declare x int(2);
+  set x = 1;
+  while x <= 10 do
+  select x;
+  set x = x + 1;
+  end while;
+end
+//
+delimiter ;
+call p12();
+--------------------------------------------------------------
+	– 无循环条件(死循环)
+	loop
+	循环体
+	......
+	end loop;
+-------------------------------------------------------------
+delimiter //
+create procedure p13()
+begin
+  loop
+	select * from user where name="bin";
+  end loop;
+end
+//
+delimiter ;
+call p13();
+--------------------------------------------------------------
+      --until 条件判断,不成立时结束循环
+	repeat
+	  循环体
+	  until 条件判断
+	end repeat; 
+-----------------------------------------------------------------
+delimiter //
+create procedure p14()
+begin
+  declare x int(2);
+  set x = 10;
+  repeat
+    select x;
+    set x = x - 1;
+  until x = 0
+  end repeat;
+end
+//
+delimiter ;
+call p14();
+------------------------------------------------------------------
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+  控制语句
+      循环结构控制语句 , 控制循环结构的执行。
+	– LEAVE 标签名 // 跳出循环
+	– ITERATE 标签名 / 放弃本次循环,执行下一次循环
+
+--------------------------------------------------------------------
+
+练习1：
+
+能够输出指定范围内的UID是偶数用户名和对应的UID号
+把第3行到第9行记录之间UID是偶数的用户名和对应的UID号输出
+
+delimiter //
+create procedure p2(in x int(2),in y int(2))
+begin
+  declare k int(2);
+  while x <= y do
+    set x = x -1;
+    select uid into k from user limit x,1;
+    if k % 2 = 0 then 
+      select name,uid from user limit x,1;
+    end if;
+    set x = x + 2;
+  end while;
+end
+//
+delimiter ;
+call p2(3,9);
+
+练习2：
+
+满足以下要求:
+– 1 定义名称为 p3 的存储过程
+– 2 用户可以自定义显示 user 表记录的行数
+– 3 若调用时用户没有输入显示记录的行数,默认显示第1条记录
+
+delimiter //
+create procedure p4( in x int(2))
+begin
+    	if x is not null then
+      	  select * from user limit x;
+    	else
+      	  select * from user limit 1;
+    	end if;
+end
+//
+delimiter ;
+call p4(2);
+
+
+拓展：MYSQL中判断字符串是否为纯数字
+
+SELECT * FROM TEST WHERE RESULT REGEXP '(^[0-9]+.[0-9]+$)|(^[0-9]$)'
+
+
+
+((2[0-4][0-9]|25[0-5]|1[0-9][0-9]|[1-9][0-9]|[1-9])\.){3}(2[0-4][0-9]|25[0-5]|1[0-9][0-9]|[1-9][0-9]|[1-9])
+
+     基本正则						   扩展正则
+^  	  匹配行首
+$  	  匹配行尾
+[]  	  集合，匹配集合中的任意单个字符
+[^] 	  对集合取反					
+.	  匹配任意单个字符				+     最少匹配一次
+*	  匹配前一个字符任意次数（包括0次）		?      最多匹配一次
+\{n,m\} 匹配前一个字符n到m次			{n,m}
+\{n\}   匹配前一次字符n次				{n}
+\{n,\}  匹配前一个字符n次以上			{n,}
+\(\)      保留						()	
+							\b    单次边界
+
+
+
+
+
+
+
+
+

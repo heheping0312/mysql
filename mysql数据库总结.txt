@@ -1,0 +1,34 @@
+
+RDBMS-------- MySQL
+
+DBA1_基础
+搭建数据库服务器：mysql
+建库，建表：数据类型，约束条件，键值
+管理表记录：select insert update delete 匹配条件 
+多表查询 链接查询（左 右） 嵌套查询
+用户管理：授权和撤销权限
+MySQL备份与恢复：mysqldump  binlog  innobackupex
+
+DBA2_进阶
+MySQL主从同步
+MySQL数据读写分离：maxscale+MySQL 一主一从
+MySQL集群：MHA+ MySQL 一主多从
+MySQL多实例：一台物理主机运行多个数据库服务
+MySQL优化：
+MySQL视图：不同的用户对表访问的时候看到的内容不一样
+MySQL存储过程：相当于创建函数，方便操作
+MySQL数据分片：mycat+MySQL 把一个表的数据分别存储到不同的服务器中，解决数据存储过大的问题
+
+NoSQL
+Redis
+MongoDB
+
+
+
+
+
+
+
+
+
+

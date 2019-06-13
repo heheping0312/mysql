@@ -1,0 +1,239 @@
+#!/bin/bash
+
+环境：
+mysql> create table user1(
+    -> name char(30),
+    -> password char(1),
+    -> uid int(2),
+    -> gid int(2),
+    -> comment char(150),
+    -> homedir char(150),
+    -> shell char(50)
+    -> );
+mysql> system cp /etc/passwd  /var/lib/mysql-files/
+mysql> load data infile "/var/lib/mysql-files/passwd" into table db9.user1 fields terminated by ":" lines terminated by "\n";
+mysql> alter table db9.user1 add id int(2) primary key auto_increment  first;
+mysql> select * from user1;
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+概念：
+  视图介绍
+      什么是视图 (View)
+	– 虚拟表
+	– 内容与真实的表相似,包含一系列带有名称的列和行数据。
+	– 视图并不在数据库中以存储的数据的形式存在。
+	– 行和列的数据来自定义视图时查询所引用的基表,并且在具体引用视图时动态生成。
+	– 更新视图的数据,就是更新基表的数据
+	– 更新基表数据,视图的数据也会跟着改变
+
+  视图优点
+      简单
+	– 使用视图的用户完全不需要关心视图中的数据是通过什么查询得到的。
+	– 视图中的数据对用户来说已经是过滤好的符合条件的结果集。
+      安全
+	– 用户只能看到视图中的数据。
+      数据独立
+	– 一旦视图的结构确定了,可以屏蔽表结构变化对用户的影响。
+
+  使用视图的限制
+      不能在视图上创建索引
+      在视图的 FROM 子句中不能使用子查询
+      以下情形中的视图是不可更新的
+	– 包含以下关键字的 SQL 语句:聚合函数 (SUM 、 MIN、 MAX 、 COUNT 等 ) 、 DISTINCT 、 GROUP BY、 HAVING 、 UNION 或 UNION ALL
+	– 常量视图
+	– JOIN
+	– FROM 一个不能更新的视图
+	– WHERE 子句的子查询引用了 FROM 子句中的表
+	– 使用了临时表,视图是不可更新
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+视图的基本使用：
+
+  创建视图
+      语法格式
+	– create view 视图名称 as SQL 查询;
+	– create view 视图名称 (字段名列表) as SQL 查询;
+      注意:在视图表中不定义字段名的话,默认使用表中的字段名,若定义字段名的话,视图表中的字段名个数必须和基本中的字段个数相等。
+
+mysql> create view v1 as select name,uid,shell from db9.user1;
+mysql> show tables;
+mysql> desc v1;
+mysql> select * from v1;
+mysql> grant select on db9.v1 to kenji@'%' identified by '123456';
+
+[root@db50 ~]# mysql -ukenji -p123456 -h 192.168.4.55
+mysql> show grants;
+mysql> select * from db9.v1;
+
+mysql> create view v2(vname,vuid) as select name,uid from db9.user1;		#自定义字段名创建试图
+mysql> desc v2;
+
+  查看视图
+      查看当前库下所有表的状态信息
+	– show table status;
+	– show table status where comment="view"\G;
+
+mysql> show table status\G;				#查看当前库下所有表的状态信息
+mysql> show table status where Comment="VIEW"\G;	#显示当前库下的视图表信息
+
+      查看创建视图的具体命令
+	– show create view 视图名;
+
+mysql> show create view v1\G;
+
+  使用视图
+      查询记录
+ 	– Select 字段名列表 from 视图名 where 条件;
+      插入记录
+	– Insert into 视图名 ( 字段名列表 ) values( 字段值列表);
+      更新记录
+	– Update 视图名 set 字段名 = 值 where 条件;
+      删除记录
+	– Delete from 视图名 where 条件;
+      注意:对视图操作即是对基表操作,反之亦然!!!
+
+  删除视图
+      语法格式
+	– drop view 视图名;
+
+mysql> drop view v1;
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+创建视图完全格式:
+  设置字段别名
+      命令格式
+	– 视图中的字段名不可以重复 所以要定义别名
+	Create view 视图名
+	select 表别名.源字段名 as 字段别名
+	from 源表名 表别名 left join 源表名 表别名
+	on 条件;
+      关联查询建的视图 默认不允许修改视图字段的值
+
+mysql> create table t1 select name,uid,shell from user limit 3;
+mysql> create table t2 select name,uid,homedir from user limit 5;
+mysql> select * from t1,t2 where t1.name=t2.name;
+mysql> create view v3 as select * from t1,t2 where t1.name=t2.name;	#出现重复，会报错
+ERROR 1060 (42S21): Duplicate column name 'name'
+
+mysql> select a.name as aname,b.name as bname from t1 a left join t2 b on a.name=b.name;
+mysql> create view v3 as select a.name as aname,b.name as bname from t1 a left join t2 b on a.name=b.name;
+mysql> select * from v3;
+
+mysql> select t1.name,t2.name from t1 left join t2 on t1.name=t2.name;
+mysql> create view v4(aname,bname) as select t1.name,t2.name from t1 left join t2 on t1.name=t2.name;
+mysql> select * from v4;
+
+  重要选项说明
+      OR REPLACE
+	语法格式:
+	– 创建时,若视图已存在,会替换已有的视图
+	– Create or replace view 视图名 as select 查询
+
+mysql> create view v4 as select * from user;
+ERROR 1050 (42S01): Table 'v4' already exists
+mysql> create or replace view v4 as select * from user;
+Query OK, 0 rows affected (0.04 sec)
+    
+      ALGORITHM
+	定义处理视图的方式
+	– ALGORITHM = {UNDEFINED | MERGE | TEMPTABLE}
+	• MERAGE (替换方式)(默认)
+	  – 视图名直接使用视图的公式替换掉,把视图公式合并到了 select 中。
+	• TEMPTABLE (具体化方式)
+	  – 先得到视图的执行结果,该结果形成一个中间结果暂时存在内存中,之后,外面的 select 语句就调用了这些中间结果。
+	• UNDEFINED (未定义)
+	  – ALGORITHM 选项的值是 UNDEFINED 表示使用的是 MERAGE 替换方式。
+
+      WITH  [LOCAL|CASCADED] CHECK OPTION	#支持检查选项
+        当视图是根据另一个视图定义时 , 对视图更新 / 删除 / 插入
+	– LOCAL 和 CASCADED 关键字决定了检查的范围。
+	– LOCAL 仅检查当前视图的限制。
+	– CASCADED 同时要满足基表的限制。( 默认值 )
+
+mysql> create table user2 select * from user1 where uid >=10 and uid <=1000;
+mysql> select * from user2;
+
+mysql> create  view v5 as select * from user2 where uid <=100 with local check option;
+mysql> update v5 set uid = 101 where name="nobody";		#超过100，检查不成功，无法创建
+ERROR 1369 (HY000): CHECK OPTION failed 'db9.v5'
+mysql> update v5 set uid = 98 where name="nobody";
+Query OK, 1 row affected (0.05 sec)
+
+mysql> create view v7 as select * from user2 where uid >=10 and uid <= 50;
+mysql> create view v8 as select * from v7 where uid >=20 with cascaded check option;
+mysql> select * from v8;
+mysql> update v8 set uid=16 where name="ntp";		#不满足v8表，不能成功
+ERROR 1369 (HY000): CHECK OPTION failed 'db9.v8'
+mysql> update v8 set uid=61 where name="ntp";		#满足v8表，不满足v7表，不能成功
+ERROR 1369 (HY000): CHECK OPTION failed 'db9.v8'
+mysql> update v8 set uid=44 where name="ntp";		#既满足v8表，又满足v7表，才能成功
+Query OK, 1 row affected (0.07 sec)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

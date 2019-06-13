@@ -1,0 +1,198 @@
+#!/bin/bash
+
+MySQL 性能调优
+  提高 MySQL 系统的性能、响应速度
+	--- 优化网络（网络带宽）
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+	– 替换有问题的硬件( CPU/ 磁盘 / 内存等的使用情况)
+
+[root@db51 ~]# ifconfig eth0				#查网卡流量，带宽
+[root@db51 ~]# uptime 					#查CPU使用率
+[root@db51 ~]# free -m					#查内存使用率
+[root@db51 ~]# df -h					#磁盘剩余空间
+[root@db51 ~]# iostat					#磁盘处理数据的速度
+[root@db51 ~]# top					#wa前面百分比越大，磁盘读写等待队列越长，说明磁盘处理能力越差
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+	– 服务程序的运行参数调整（并发连接数 超时时间 索引缓存 重复使用的线程数量）
+
+mysql> show processlist;				#显示当前连接服务器的用户
+mysql> show status;					#显示当前服务器的状态信息，（变量名 值）
+mysql> show status like '%innodb%';			#根据当前状况，查看某个变量的值，%为模糊匹配
+mysql> show variables;					#查看所有变量的值，启动服务的默认配置或者修改后的值
+mysql> show variables like '%memory%';			#查看某个变量的值，%为模糊匹配
+mysql> set global connect_timeout = 20;			#设置变量值，全局变量加global，局部变量不要global，只在当前生效，重启后失效，在/etc/my.cnf中[mysqld]下添加connect_timeout = 20就可以永久生效
+
+  并发及连接控制
+    连接数、连接超时
+	选 项					含 义
+	max_connections			允许的最大并发连接数
+	connect_timeout			等待建立连接的超时秒数,默认 10 秒,只在登录时有效
+	wait_timeout			等待关闭连接的不活动超时秒数,默认 28800 秒( 8 小时)
+
+     查看当前已使用的连接数
+mysql> show global status like "max_used_connections";
+     查看默认的最大连接数
+mysql> show variables like 'max_connections';
+	理想比率 <= 85%
+
+  缓存参数控制
+     缓冲区、线程数量、开表数量   
+		选 项					含 义
+	key_buffer-size 		用于 MyISAM 引擎的关键索引缓存大小
+	sort_buffer_size 		为每个要排序的线程分配此大小的缓存空间
+	read_buffer_size 		为顺序读取表记录保留的缓存大小
+	thread_cache_size 	允许保存在缓存中被重用的线程数量
+	table_open_cache  	为所有线程缓存的打开的表的数量
+
+     key_buffer_size=8M
+	– 当 Key_reads / Key_read_requests 较低时
+	– 可适当加大此缓存值
+	   show global status like "key_read%";
+	   show variables like "key_buffer_size";
+
+     sort_buffer_size=256K
+	– 增大此值可提高 ORDER 和 GROUP 的速度
+	   show variables like "sort_buffer_size";
+
+      查看表记录读取缓存
+	– 此缓存值影响 SQL 查询的响应速度
+	  show variables like "read_%_size";
+
+      查看可重用线程数
+	  show variables like "thread_%_size";
+
+      查看当前的线程重用状态
+	  show global status like "threads_%";
+
+      查看已打开、打开过多少个表
+	  show global status like "open%tables";
+      查看可缓存多少个打开的表
+	  show variables like "table_open_cache";
+	理想比例<= 95%
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+	– 对 SQL 查询进行优化
+
+SQL 查询优化
+
+常用日志种类及选项
+类 型			用 途					配 置
+错误日志 	记录启动/运行/停止过程中的错误消息		log-error[=name]
+查询日志 	记录客户端连接和查询操作			general-log      general-log-file=
+慢查询日志	记录耗时较长或不使用索引的查询操作		slow-query-log   slow-query-log-file=	long-query-time=
+
+在数据库服务器上启用慢查询日志文件，记录超过指定时间显示查询结果的SQL命令
+
+log-error=/var/log/mysqld.log	错误日志文件
+log-bin=日志文件			binlog日志
+
+查询日志：记录数据库服务执行过的所有sql命令
+慢查询日志：记录数据库服务器上超过指定时间显示查询结果的sql命令，默认超时时间为10秒
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+记录慢查询
+		选 项				含 义
+	slow-query-log			启用慢查询
+	slow-query-log-file		指定慢查询日志文件
+	long-query-time			超过指定秒数(默认 10秒)的查询才被记录
+	log-queries-not-using-indexes	记录未使用索引的查询
+
+]# vim /etc/my.cnf
+... ...
+slow-query-log							#启用慢查询日志
+]# systemctl restart mysqld
+]# cat /var/lib/mysql/db50-slow.log 				#查看慢查询日志
+]# mysqldumpslow /var/lib/mysql/db50-slow.log 		#统计超时的次数
+]# mysqldumpslow /var/lib/mysql/db50-slow.log  > /文件    #导出给程序员去优化
+
+]# vim /etc/my.cnf
+... ...
+general-log								#启用查询日志
+]# systemctl restart mysqld
+]# cat /var/lib/mysql/db50.log					#查看查询日志
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+优化查询缓存：
+    查看缓存的大小
+mysql> show variables like "%cache%";   找出与缓存相关的
+mysql> show variables like "query_cache%";   与查询缓存相关的
++------------------------------+---------+
+| Variable_name                | Value   |
++------------------------------+---------+
+| query_cache_limit            | 1048576 |		#查询缓存结果超过1M不允许放入查询缓存
+| query_cache_min_res_unit     | 4096    |		#查询缓存的最小存储单元4K
+| query_cache_size             | 1048576 |		#默认查询缓存大小1M
+| query_cache_type             | OFF     |		#查询缓存开关
+| query_cache_wlock_invalidate | OFF     |		#查询缓存写锁无效 关闭
++------------------------------+---------+
+
+query_cache_type = 0 | 1 | 2
+			关 | 开 | 开
+0.禁用查询缓存
+1.启用查询缓存
+2.启用查询缓存，但需要手动设置缓存本次查询的结果
+
+query_cache_wlock_invalidate
+  myisam存储引擎，当有人对表进行写操作时，服务器不会把查询缓存中的数据给查询的人，需要等写完后，才执行
+
+    查看当前的查询缓存统计
+mysql> show global status like "qcache%";
++-------------------------+---------+
+| Variable_name           | Value   |
++-------------------------+---------+
+| Qcache_free_blocks      | 1       |
+| Qcache_free_memory      | 1031832 |
+| Qcache_hits             | 0       |	#查询数据时，在缓存中找到的次数
+| Qcache_inserts          | 0       |	#查询缓存被查找时，值会自加1 （找过的次数）
+| Qcache_lowmem_prunes    | 0       |
+| Qcache_not_cached       | 1       |
+| Qcache_queries_in_cache | 0       |
+| Qcache_total_blocks     | 1       |
++-------------------------+---------+
+Qcache_hits/Qcache_inserts  越大越好，（命中率越高）
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+	--- 网络拓扑结构（是否有数据流量的瓶颈），代理服务器的瓶颈
+
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+调优思路总结
+
+		手段			     具体操作
+	      升级硬件 		CPU 、内存、硬盘
+	     加大网络带宽 		付费加大带宽
+	调整 mysql 服务运行参数 	并发连接数、连接超时时间、重复使用的线程数 ........
+	  调整与查询相关的参数 	查询缓存、索引缓存 .......
+  	    启用慢查询日志 		slow-query-log
+	    网络架构不合理 		调整网络架构
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

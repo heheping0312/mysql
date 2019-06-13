@@ -1,0 +1,321 @@
+#!/bin/bash
+
+mysql主从同步
+从数据库服务器自动同步主库上的数据到本机,实现数据的自动备份
+
+主数据库服务器：接收客户端访问的数据库服务器
+从数据库服务器：自动同步主数据库服务器上的数据到本机
+
+部署mysql主从同步：
+  主从同步原理
+      Master ,记录数据更改操作
+	启用 binlog 日志
+	设置 binlog 日志格式
+	设置 server_id
+      Slave 运行 2 个线程
+	Slave_IO :复制 master 主机 binlog 日志文件里的 SQL 到本机的 relay-log 文件里。
+	Slave_SQL :执行本机 relay-log 文件里的 SQL 语句,重现 Master 的数据操作。
+
+  主数据库的配置步骤：
+      1.启用binlog日志
+      2.用户授权
+      3.查看日志信息
+
+  从数据库的配置步骤：
+      1.制定server_id
+      2.指定主库信息
+      3.启动slave程序
+      4.查看slave程序运行状态
+
+教学环境：
+  主数据库：192.168.4.51
+
+  从数据库：192.168.4.52
+
+###################################################################################################
+
+#构建主从同步
+  基本构建思路
+      1.确保数据相同
+	从库必须要有主库上的数据
+
+把主库中的数据备份到从库中			#确保2个数据库中数据相同
+]# mysqldump -uroot -p123qqq...A -A > db5.sql	#主库上备份
+]# scp db5.sql 192.168.4.52:/root/
+]# mysql -uroot -p123qqq...A < db5.sql		#从库上恢复主库的备份
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+      
+      2.配置主服务器
+	启用binlog日志及设置格式，设置server_id，授权用户
+
+1>启用binlog日志及设置格式，设置server_id
+]# vim /etc/my.cnf
+[mysqld]
+server_id=51
+log-bin=db51
+binlog_format="mixed"
+]# systemctl restart mysqld
+]# ls /var/lib/mysql/db51*
+/var/lib/mysql/db51.000001  /var/lib/mysql/db51.index
+2>授权用户
+mysql> grant replication slave on *.* to repluser@"192.168.4.%" identified by "123qqq...A";
+mysql> select user,host from mysql.user;
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+      3.配置从服务器
+	设置server_id，指定主数据库服务器信息
+
+1>设置server_id
+]# vim /etc/my.cnf
+[mysqld]
+server_id=dba52
+]# systemctl restart mysqld
+2>指定主数据库服务器信息
+mysql> show slave status;			#查看slave运行状态
+mysql> show master status;			#查看主库的日志信息
++-------------+----------+--------------+------------------+-------------------+
+| File        | Position | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set |
++-------------+----------+--------------+------------------+-------------------+
+| db51.000001 |      451 |              |                  |                   |
++-------------+----------+--------------+------------------+-------------------+
+mysql> change master to master_host="192.168.4.51",	#主库地址
+    -> master_user="repluser",				#主库授权用户
+    -> master_password="123qqq...A",			#授权用户密码
+    -> master_log_file="db51.000001",			#主库日志文件名
+    -> master_log_pos=451;				#主库日志Position(偏移位置)
+3>启动slave程序
+mysql> start slave;					
+4>查看slave程序运行状态	确认 IO 线程、 SQL 线程都已运行
+mysql> show slave status\G;
+*************************** 1. row ***************************
+               Slave_IO_State: Waiting for master to send event
+                  Master_Host: 192.168.4.51
+                  Master_User: repluser
+                  Master_Port: 3306
+                Connect_Retry: 60
+              Master_Log_File: db51.000001
+          Read_Master_Log_Pos: 451
+               Relay_Log_File: dba3-relay-bin.000002
+                Relay_Log_Pos: 315
+        Relay_Master_Log_File: db51.000001
+             Slave_IO_Running: Yes		#IO线程已运行
+            Slave_SQL_Running: Yes		#SQL线程已运行
+		... ...
+                Last_IO_Error: 			#记录IO报错信息
+               Last_SQL_Errno: 0
+               Last_SQL_Error: 			#记录SQL报错信息
+		... ...
+
+相关文件
+文件名				说明
+master.info 			连接主服务器信息
+relay-log.info 			中继日志信息
+主机名 -relay-bin.xxxxxx 	中继日志
+主机名 -relay-bin.index 	中继日志索引文件
+
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+      4.测试配置
+	客户端连接主库，写入的数据，再连接从库的时候也能访问到
+
+1>在主库服务器上添加一个客户端连接用户访问主库
+mysql> grant select,insert on db5.* to  yaya@"%" identified by "123qqq...A";
+2>在主机50上连接主数据库服务器51上查询或存储数据
+[root@dba1 ~]# mysql -uyaya -p123qqq...A -h192.168.4.51
+mysql> insert into db5.a values(110);
+......
+mysql> select * from db5.a;		#从库上查询，发现访问主库插入的数据，从库上也能够查到
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+      5.临时关闭同步
+	stop slave;
+      6.永久关闭同步，把从库还原成独立的服务器  #删除从库相关文件
+	rm -rf /var/lib/mysql/{master.info,relay-log.info,主机名-relay-bin.*}
+	systemctl restart mysqld
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+  常用配置选项
+       主库配置选项
+	适用于 Master 服务器
+	选 项			用 途
+binlog_do_db=name 	设置 Master 对哪些库记日志
+binlog_ignore_db=name 	设置 Master 对哪些库不记日志
+
+      从库配置选项
+	适用于 Slave 服务器
+	选 项			用 途
+log_slave_updates		记录从库更新,允许链式复制( A-B-C )
+relay_log=dbsvr2-relay-bin 	指定中继日志文件名
+replicate_do_db=mysql		仅复制指定库,其他库将被忽略,此选项可设置多条(省略时复制所有库)
+replicate_ignore_db=test 	不复制哪些库,其他库将被忽略, ignore-db 与 do-db 只需选用其中一种
+
+################################################################################################################
+
+MySQL 主从同步模式
+  结构模式
+      主从同步结构模式介绍
+	基本应用
+	– 单向复制（主从）:主 --> 从
+	扩展应用
+	– 链式复制（主从从）:主 --> 从 --> 从		#不单独用，一般和第三方软件配置高可用
+	– 双向复制（主主）:主 <--> 从			#不单独用，一般和第三方软件配置高可用
+	– 放射式复制（一组多从）:从 <-- 主 --> 从
+			    		|
+			    		从
+
+
+  配置主从从结构
+
+主库：host51:
+1>启用binlog日志及设置格式，设置server_id
+]# vim /etc/my.cnf
+[mysqld]
+server_id=51
+log-bin=db51
+binlog_format="mixed"
+]# systemctl restart mysqld
+]# ls /var/lib/mysql/db51*
+/var/lib/mysql/db51.000001  /var/lib/mysql/db51.index
+2>授权用户
+mysql> grant replication slave on *.* to repluser@"192.168.4.%" identified by "123qqq...A";
+mysql> select user,host from mysql.user;
+[root@dba2 mysql]# mysqldump -uroot -p123qqq...A  -A > /zhu.sql
+[root@dba2 mysql]# scp -r /zhu.sql  192.168.4.52:/root/
+[root@dba2 mysql]# scp -r /zhu.sql  192.168.4.53:/root/
+
+从库1：host52:
+[root@dba3 ~]# mysql -uroot -p123qqq...A < zhu.sql 
+[root@dba3 ~]# vim /etc/my.cnf
+[mysqld]
+server_id=52
+log-bin=db52
+binlog_format="mixed"
+log_slave_updates			#中间从库必须有这一条
+[root@dba3 ~]# systemctl restart mysqld
+[root@dba3 ~]# mysql -uroot -p123qqq...A
+mysql> change master to master_host="192.168.4.51",
+    -> master_user="repluser",
+    -> master_password="123qqq...A",
+    -> master_log_file="db51.000001",
+    -> master_log_pos=2080;
+mysql> start slave;
+mysql> show slave status\G;
+		... ...
+             Slave_IO_Running: Yes
+            Slave_SQL_Running: Yes
+		... ...
+mysql> grant replication slave on *.* to repluser@"192.168.4.%" identified by "123qqq...A";
+
+从库2：host53:
+[root@dba4 ~]# mysql -uroot -p123qqq...A < zhu.sql 
+[root@dba4 ~]# vim /etc/my.cnf
+[mysqld]
+server_id=dba52
+[root@dba4 ~]# systemctl restart mysqld
+[root@dba4 ~]# mysql -uroot -p123qqq...A
+mysql> change master to master_host="192.168.4.52",
+    -> master_user="repluser",
+    -> master_password="123qqq...A",
+    -> master_log_file="db51.000001",
+    -> master_log_pos=2080;
+mysql> start slave;
+mysql> show slave status\G;
+                ... ...
+             Slave_IO_Running: Yes
+            Slave_SQL_Running: Yes
+                ... ...
+##################################################################################################################
+
+mysql主从同步复制模式
+  复制模式介绍
+      异步复制( Asynchronous replication )
+	– 主库在执行完客户端提交的事务后会立即将结果返给客户端,并不关心从库是否已经接收并处理。
+      全同步复制( Fully synchronous replication )  百度：mysql组同步设置   生产环境一般不会用的，都用的半同步模式
+	– 当主库执行完一个事务,所有的从库都执行了该事务才返回给客户端。
+      半同步复制( Semisynchronous replication )
+	– 介于异步复制和全同步复制之间,主库在执行完客户端提交的事务后不是立刻返回给客户端,而是等待至少一个从库接收到并写到 relay log 中才返回给客户端。  
+
+
+  配置半同步配置
+      查看是否允许动态加载模块
+	– 默认允许
+mysql> show variables like "have _ dynamic _ loading";
++----------------------+-------+
+| Variable_name        | Value |
++----------------------+-------+
+| have_dynamic_loading | YES   |
++----------------------+-------+
+
+      命令行加载插件
+	– 用户需有 SUPER 权限
+
+查看：
+mysql> select plugin_name,plugin_status from information_schema.plugins where plugin_name like '%semi%';
+
+主库：
+mysql> install plugin rpl_semi_sync_master soname 'semisync_master.so';
+
+从库： 
+mysql> install plugin rpl_semi_sync_slave SONAME 'semisync_slave.so';
+
+       启用半同步复制
+	– 在安装完插件后,半同步复制默认是关闭的
+主: 
+mysql> set global rpl_semi_sync_master_enabled = 1;
+
+从: 
+mysql> set global rpl_semi_sync_slave_enabled = 1;
+
+查看: 
+mysql> show variables like "rpl_semi_sync_ %_enabled";
+
+      配置文件永久启用半同步复制
+	– 命令配置临时配置,重启服务会失效
+	– 修改后需要重启服务
+	– 写在主配置文件 /etc/my.cnf 的 [mysqld] 下方
+主:
+plugin-load=rpl_semi_sync_master=semisync_master.so 
+rpl_semi_sync_master_enabled=1
+
+从:
+plugin-load=rpl_semi_sync_slave=semisync_slave.so 
+rpl_semi_sync_slave_enabled=1
+
+      在有的高可用架构下, master 和 slave 需同时启动
+	– 以便在切换后能继续使用半同步复制
+plugin-load="rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so"
+rpl-semi-sync-master-enabled = 1
+rpl-semi-sync-slave-enabled = 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

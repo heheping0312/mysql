@@ -1,0 +1,141 @@
+#!/bin/bash
+#什么是数据库
+    什么是数据库
+	DB,DataBase
+	--数据库：依照某种数据模型进行组织并存放到存储器的数据集合
+	DBMS,DataBase Management System
+	--数据库管理系统：用来操纵和管理数据库的大型服务软件
+	DBS,DataBase System
+	--数据库系统：即DB+DBMS，指带有数据库并整合了数据库管理软件的计算机系统
+    E-R数据模型
+	实体-关系 模型
+	--Entity-Relationship Model
+    常见的数据库服务软件
+	类型			厂商
+	Oracle DataBase		Oracle(甲骨文)
+	MySQL/MariaDB						开源
+	SQL Server		Microsoft(微软)
+	Access
+	DB2			IBM
+	Sybase			Sybase
+	PostgreSQL		加州大学伯克利分校		开源
+
+
+#MySQL数据库介绍：存储数据的仓库
+    MySQL的器源与发展过程
+	最为著名、应用最广泛的开源数据库软件
+	--最早隶属于瑞典的MySQL AB公司
+	--2008年1月，MySQL AB被Sun收购
+	--2009年4月，SUN被Oracle收购
+	崭新的开源分支MariaDB
+	--为应付MySQL可能会闭源的风险而诞生
+	--由MySQL原作者Widenius主导开发
+	--与MySQL保持最大程度兼容
+    MySQL的特点及应用
+	主要特点
+	--适用于中小规模、关系型数据库系统
+	--支持Linux/Unix、Windows等多种操作系统
+	--使用C和C++编写，可移植性强
+	--通过APL支持Python/Java/Perl/PHP等语言
+	典型应用环境
+	--LAMP平台，与Apache HTTP Sever组合
+	--LNMP平台，与Nginx组合
+	--WNMP
+	--WAMP
+	数据库服务都那些公司在使用？
+	--购物网站
+	--游戏网站
+	--金融网站
+	数据服务存储的是什么数据？
+	--帐号信息
+	--对应的数据信息
+    提供数据库服务的软件有那些？
+	--开源软件  mysql 、  mongodb  、  redis
+	--商业软件  oracle 、 db2  、 SQL  SERVER
+    mysql/mariadb软件介绍
+	来源：
+	--mysql官网下载
+	--mariadb使用操作系统安装光盘自带软件包
+    mysql软件包的封包类型
+	--rpm包
+	--源码包	(可以自定义安装信息)
+
+拓展：非关系型数据库软件（NoSQL）mongodb 、redis 、 memcached
+
+#构建MySQL服务器
+#MySQL安装
+     MySQL安装前准备环境
+	基本需求
+	--1、采用RHEL7.4系统搭建MySQL服务器
+	--2、关闭防火墙服务
+	--3、关闭Selinux
+	--4、软件mysql-5.7.17-1
+	从官网下载RPM包
+	--http://dev.mysql.com/downloads/mysql/
+	--选择适用于当前系统的bundle集合包
+	  mysql-community-client		#客户端应用程序
+	  mysql-community-common		#数据库和客户端库共享文件
+	  mysql-community-devel			#客户端应用程序的库和头文件
+	  mysql-community-embedded		#嵌入式函数库
+	  mysql-community-embedded-compat	#嵌入式兼容函数库
+	  mysql-community-embedded-devel	#头文件和库文件作为MySQL的嵌入式库文件
+	  mysql-community-libs			#MySQL数据库客户端应用程序的共享集
+	  mysql-community-libs-compat		#客户端应用程序的共享兼容库
+     RPM方式安装MySQL数据库
+	准备工作
+	--删除系统自带mariadb mysql数据库软件
+	  ]#rpm   -qa  |  grep   -i  mariadb
+	  ]#systemctl  stop  mariadb
+	  ]#rpm   -e  --nodeps   mariadb-server   mariadb	#卸载软件包
+	  ]#rm  -rf  /etc/my.cnf		#删除文件/etc/my.cnf
+	  ]#rm  -rf  /var/lib/mysql		#删除数据/var/lib/mysql
+	--安装mysql软件  至少安装server、client、share*包
+	  ]# tar  -xf  mysql-5.7.17-1.el7.x86_64.rpm-bundle.tar
+	  ]#  ls  *.rpm
+	  ]#  rm  -rf   mysql-community-server-minimal-5.7.17-1.el7.x86_64.rpm  #可以看出需要安装的依赖包
+	  ]#  yum   -y   install    perl-JSON    #7.4前系统还需要安装perl-Dumper和perl-Time-HiRes
+	  ]#  rpm  -Uvh    mysql-community-*.rpm #采用U升级安装，可替换冲突文件
+	  ]#  rpm  -qa   | grep  -i   mysql
+	--修改配置文件(不需要修改配置文件 按默认配置运行即可)
+	  ]#  ls  /etc/my.cnf
+     启动MySQL数据库服务器
+	--服务脚本为/usr/lib/systemd/system/mysqld.service
+	  ]# systemctl   start  mysqld
+	  ]# systemctl   enable  mysqld
+	--查看服务进程和端口号
+	  ]# ps   -C   mysqld
+		  PID TTY          TIME CMD
+		 3252 ?        00:00:00 mysqld
+	  ]# netstat  -utnlp  | grep  mysqld
+	    tcp6       0      0 :::3306            :::*       LISTEN  3252/mysqld
+    服务名  mysqld
+    服务的主配置文件  /etc/my.cnf
+    数据目录  /var/lib/mysql
+    日志文件   /var/log/mysqld.log	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

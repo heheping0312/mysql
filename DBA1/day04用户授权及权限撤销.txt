@@ -1,0 +1,177 @@
+#!/bin/bash
+
+#用户授权及撤销
+  密码恢复及设置
+	--恢复root管理员本机登陆密码
+	--设置管理员密码
+  创建授权
+	--MySQL授权库和表信息
+	--GRANT配置授权
+	--查看用户授权
+	--重设用户密码
+  撤销用户权限
+
+#密码恢复及设置
+  恢复root管理员本机登陆密码
+	1.停止MySQL服务程序
+	2.跳过授权表启动MySQL服务程序
+	--skip-grant-tables	#写入/etc/my.cnf配置文件
+	3.重设root密码（更新user表记录）
+	4.以正常方式重启MySQL服务程序
+
+例：
+]# systemctl stop mysqld
+]# vim /etc/my.cnf
+[mysqld]
+skip-grant-tables		#跳过授权表启动服务
+]# systemctl start mysqld
+]# mysql
+mysql> desc mysql.user;
+mysql> select host,user,authentication_string from mysql.user;
+mysql> update mysql.user set authentication_string=password("123aaa...A") where user="root" and host="localhost";				#重设root密码，password（"密码"）给密码加密
+mysql> flush privileges;	#刷新权限
+mysql> quit
+]# vim /etc/my.cnf		#删除跳过授权表启动服务
+]# systemctl restart mysqld
+]# mysql  -uroot -p123aaa...A
+
+  重设root 管理员本机登陆密码
+      在shell命令行修改登陆密码
+	--需要验证旧密码
+	--不适用于跳过授权表启动的情况
+
+例：
+]# mysqladmin -uroot -p password "123qqq...A"
+Enter password:		#输入旧密码
+
+拓展：查看模块，修改配置文件，重启服务，修改密码限制
+]# find / -name "validate_password.so"
+]# vim /etc/my.cnf
+[mysqld]
+plugin-load=validate_password.so                #加载模块
+validate-password=FORCE_PLUS_PERMANENT          #永久启用模块
+validate_password_policy=0                      #只验证密码长度
+validate_password_length=6                      #指定密码长度
+
+  创建授权
+      mysql授权库和表信息
+	--user表，存储授权用户的访问权限
+	--db表，存储授权用户对数据库的访问权限
+	--tables_priv表，存储授权用户对表的访问权限
+	--columns_priv表，存储授权用户对字段的访问权限
+      GRANT配置授权
+	基本用法
+	--grant 权限列表.... on 库名.表名 to 用户名@'客户端地址' identified by '密码' [with grant option]  
+											#是否有授权权限
+	注意事项
+	--当库名.表名为*.*时，匹配所有库所有表
+	--授权设置存放在mysql库的user表
+	权限列表
+	--all：匹配所有权限
+	--select,update,insert....
+	--select,update(字段1，..字段N)
+	--usage：无权限
+	客户端地址
+	--%：匹配所有主机
+	--192.168.1.%：匹配指定的一个网段
+	--192.168.1.1：匹配指定IP地址的单个主机
+	--%.tarena.com：匹配一个DNS区域
+	--svr1.tarena.com：匹配指定域名的当个主机
+
+例：
+mysql> grant all on *.* to mydba@"%" identified by "123qqq...A" with grant option;
+
+  查看用户授权
+      用户查看自己的权限
+	--show grants;
+      管理员可查看其他用户的权限
+	--show grant for 用户名@'客户端地址';
+      显示当前登陆名和客户端地址
+	--select user();
+      显示当前服务端主机名
+	--select @@hostname;
+
+例：
+]# mysql -h192.168.4.50 -umydba -p123qqq...A
+mysql> select user();				#显示当前登陆名和客户端地址
+mysql> select @@hostname;			#显示当前服务端主机名
+mysql> show grants;				#显示当前用户权限
+mysql> grant select on db3.* to admin@'192.168.4.52' identified by '123456'; #测试授权功能，给其他用户授权
+
+
+  重设用户密码
+      授权用户连接后修改密码
+	--set password=password("新密码");
+      管理员重置授权用户连接密码
+	--set password for 用户名@'客户端地址'=password("新密码");
+
+  撤销用户权限
+      基本用法
+	--revoke 权限列表 on 库名.表名 from 用户名@"客户端地址";
+
+例：
+mysql> select user,host from mysql.user;
++-----------+--------------+
+| user      | host         |
++-----------+--------------+
+| mydba     | %            |
+| admin     | 192.168.4.52 |
+| mysql.sys | localhost    |
+| root      | localhost    |
++-----------+--------------+
+mysql> show grants for mydba@'%';
++--------------------------------------------------------------+
+| Grants for mydba@%                                           |
++--------------------------------------------------------------+
+| GRANT ALL PRIVILEGES ON *.* TO 'mydba'@'%' WITH GRANT OPTION |
++--------------------------------------------------------------+
+mysql> revoke GRANT OPTION on *.* from mydba@'%';
+mysql> show grants for mydba@'%';
++--------------------------------------------+
+| Grants for mydba@%                         |
++--------------------------------------------+
+| GRANT ALL PRIVILEGES ON *.* TO 'mydba'@'%' |
++--------------------------------------------+
+mysql> revoke all on *.* from 'mydba'@'%';
+mysql> show grants for mydba@'%';
++-----------------------------------+
+| Grants for mydba@%                |
++-----------------------------------+
+| GRANT USAGE ON *.* TO 'mydba'@'%' |
++-----------------------------------+
+mysql> drop user mydba@'%';				#删除用户
+mysql> select user,host from mysql.user;
++-----------+--------------+
+| user      | host         |
++-----------+--------------+
+| admin     | 192.168.4.52 |
+| mysql.sys | localhost    |
+| root      | localhost    |
++-----------+--------------+
+
+拓展：
+mysql> show grants for mydba@"%";
++--------------------------------------------------------------+
+| Grants for mydba@%                                           |
++--------------------------------------------------------------+
+| GRANT ALL PRIVILEGES ON *.* TO 'mydba'@'%' WITH GRANT OPTION |
++--------------------------------------------------------------+
+mysql> revoke all on db3.* from mydba@"%";
+ERROR 1141 (42000): There is no such grant defined for user 'mydba' on host '%'
+mysql> revoke update,insert on *.* from mydba@"%";
+Query OK, 0 rows affected (0.00 sec)
+mysql> show grants for mydba@"%";
+| GRANT SELECT, DELETE, CREATE, DROP, RELOAD, SHUTDOWN, PROCESS, FILE, REFERENCES, INDEX, ALTER, SHOW DATABASES, SUPER, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER, CREATE TABLESPACE ON *.* TO 'mydba'@'%' WITH GRANT OPTION |
+
+
+
+
+
+
+
+
+
+
+
+
+

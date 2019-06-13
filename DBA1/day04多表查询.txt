@@ -1,0 +1,132 @@
+#!/bin/bash
+
+#复制表:
+  作用：
+	--备份表
+	--快速创建相同结构的表
+	--复制的表没有源表的键值，需要手动添加
+  语法格式：
+      将源表XXX复制为新表YYY
+	--create table yyy select * from xxx;
+      将指定的查询结果复制为新表ZZZ
+	--create table zzz SQL查询语句；
+      复制源表XXX的结构到新表VVV
+	--create table vvv select * from xxx where false;
+      将源表VVV的名称改为WWW
+	--alter table vvv rename to www;
+  
+例：
+mysql> create database db4;
+mysql> use db4;
+mysql> show tables;
+mysql> create table user2 select * from db3.user;
+mysql> select * from user2;
+mysql> desc user2;
+mysql> create table user3 select * from db3.user order by uid desc limit 10;
+mysql> create table user4 select * from db3.user where 1= 2;			#仅复制表结构，给一个不成立的条件
+mysql> alter table user4 rename user5;
+
+#多表查询
+  概述：多表查询，也称为连接查询
+	--将2个或2个以上的表，按某个条件连接取来，从中选取需要的数据
+	--当多个表中存在相同意义的字段（字段名可以不同）时，可以通过该字段连接多个表
+  格式:查询的结果叫笛卡尔集，查询结果的总条目数=（表a的记录数*表b的记录数）
+	--select 字段名列表 from 表a，表b；
+	--select 字段名列表 from 表a，表b where 条件；
+
+例：
+mysql> create table t1 select name,uid,shell from user limit 3;
+mysql> create table t2 select name,gid,homedir from user limit 6;
+mysql> select * from t1,t2;
+mysql> select * from t1,t2 where t1.name=t2.name;
+mysql> select t1.uid,t2.* from t1,t2 where t1.name=t2.name;
+
+  where子查询（嵌套查询）
+	--把内层查询结果作为外层查询的查询条件
+      查询格式
+	--select 字段名列表 from 表名 where 条件 （select 字段名列表 from 表名 where 条件）；
+例：
+mysql> select name,uid from user where uid < (select avg(uid) from user);
+mysql> select name from user where name in (select name from db4.user3 where shell="/bin/bash");
+
+  左连接查询：条件成立时，以左表为主显示查询结果
+      基本用法
+	--select 字段名列表 from 表a left join  表b on 条件表达式；
+
+  右连接查询：条件成立时，以右表为主显示查询结果
+      基本用法
+        --select 字段名列表 from 表a right join  表b on 条件表达式；
+  适合比较相同表结构里数据的差异
+
+例：
+mysql> create table t3 select name,uid,shell from user limit 5;
+mysql> create table t4 select name,uid,shell from user limit 9;
+mysql> select * from t3 left join t4 on t3.name=t4.name;
+mysql> select * from t3 right join t4 on t3.name=t4.name;
++--------+------+---------------+----------+------+----------------+
+| name   | uid  | shell         | name     | uid  | shell          |
++--------+------+---------------+----------+------+----------------+
+| root   |    0 | /bin/bash     | root     |    0 | /bin/bash      |
+| bin    |    1 | /sbin/nologin | bin      |    1 | /sbin/nologin  |
+| daemon |    2 | /sbin/nologin | daemon   |    2 | /sbin/nologin  |
+| adm    |    4 | /sbin/nologin | adm      |    4 | /sbin/nologin  |
+| lp     |    7 | /sbin/nologin | lp       |    7 | /sbin/nologin  |
+| NULL   | NULL | NULL          | sync     |    0 | /bin/sync      |
+| NULL   | NULL | NULL          | shutdown |    0 | /sbin/shutdown |
+| NULL   | NULL | NULL          | halt     |    0 | /sbin/halt     |
+| NULL   | NULL | NULL          | mail     |   12 | /sbin/nologin  |
++--------+------+---------------+----------+------+----------------+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

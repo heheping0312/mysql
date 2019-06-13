@@ -1,0 +1,303 @@
+#!/bin/bash
+
+拓扑结构
+
+            master51
+	        |
+		|
+______________________________________________________
+  |		|         |         |		|
+ slave52    slave53   slave54     slave55      mgm56
+  备用主     备用主                            Manager
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+环境配置
+
+一、配置所有数据节点主机之间可以互相以ssh密钥对方式认证登陆
+]# ssh-keygen				#创建密钥对,一路回车
+]# ssh-keygen -N "" -f /root/.ssh/id-rsa	#非交互生成密钥文件
+]# ssh-copy-id  root@192.168.4.52  	#同样拷贝公钥给其他4台数据库服务器
+]# scp /root/.ssh/id_rsa.pub  /root/.ssh/authorized_keys	#手动传公钥，弱点是会覆盖原有的公钥，上面的命令会追加重定向到已有的公钥中
+
+二、配置主库db51
+[root@db51 ~]# vim /etc/my.cnf
+[mysqld]
+server_id=51					#指定ID值
+log-bin=db51					#开启binlog日志并指定日志路径，日志名
+binlog_format="mixed"				#设置日志记录格式
+plugin-load="rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so;validate_password.so"	#加载模块
+rpl_semi_sync_master_enabled = 1		#开启主库半同步配置
+rpl_semi_sync_slave_enabled = 1			#开启从库半同步配置
+validate-password=FORCE_PLUS_PERMANENT          #永久启用模块
+validate_password_policy=0                      #只验证密码长度
+validate_password_length=6                      #指定密码长度
+]# systemctl restart mysqld
+
+三、配置备用主库DB52，DB53
+]# vim /etc/my.cnf
+[mysqld]
+server_id=51					#指定ID值
+log-bin=db51					#开启binlog日志并指定日志路径，日志名
+binlog_format="mixed"				#设置日志记录格式
+plugin-load="rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so;validate_password.so"	#加载模块
+rpl_semi_sync_master_enabled = 1		#开启主库半同步配置
+rpl_semi_sync_slave_enabled = 1			#开启从库半同步配置
+validate-password=FORCE_PLUS_PERMANENT          #永久启用模块
+validate_password_policy=0                      #只验证密码长度
+validate_password_length=6                      #指定密码长度
+]# systemctl restart mysqld
+]# mysql  -uroot  -p123456
+mysql> change master to 
+    -> master_host="192.168.36.107",
+    -> master_user="repluser",
+    -> master_password="123456",
+    -> master_log_file="master51.000001",
+    -> master_log_pos=441;
+mysql> start slave;
+]# mysql -uroot -p123456 -e "show slave status\G"  | grep -i YES
+
+四、配置从库DB54，DB55
+]# vim /etc/my.cnf
+[mysqld]
+server_id=54
+]# systemctl  restart mysqld
+]# mysql  -uroot  -p123456
+mysql> change master to 
+    -> master_host="192.168.36.107",
+    -> master_user="repluser",
+    -> master_password="123456",
+    -> master_log_file="master51.000001",
+    -> master_log_pos=441;
+mysql> start slave;
+]# mysql -uroot -p123456 -e "show slave status\G"  | grep -i YES
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+配置高可用集群
+
+  1、把规划使用的vip地址192.168.4.100部署当前的主数据库服务器192.168.4.51
+[root@db51 ~]# ifconfig eth0:1 192.168.4.100
+[root@db51 ~]# ifconfig eth0:1
+
+  2、在所有数据库服务器上做如下授权
+mysql> grant all on *.* TO 'root'@'%' identified by '123456';
+]# mysql -uroot -p123456 -e "show grants for root@'%';"
+
+  3、在所有主机上安装 mha-node 包
+unzip mha-soft-student.zip
+]# cd mha-soft-student/
+/*
+]# ls
+master_ip_failover                      perl-Email-Date-Format-1.002-15.el7.noarch.rpm  perl-MIME-Lite-3.030-1.el7.noarch.rpm
+mha4mysql-manager-0.56.tar.gz           perl-Log-Dispatch-2.41-1.el7.1.noarch.rpm       perl-MIME-Types-1.38-2.el7.noarch.rpm
+mha4mysql-node-0.56-0.el6.noarch.rpm    perl-Mail-Sender-0.8.23-1.el7.noarch.rpm        perl-Parallel-ForkManager-1.18-2.el7.noarch.rpm
+perl-Config-Tiny-2.14-7.el7.noarch.rpm  perl-Mail-Sendmail-0.79-21.el7.art.noarch.rpm
+*/
+]# yum -y install perl-DBD-mysql perl-DBI
+]# yum -y install *.rpm
+
+  4、在管理主机manager(db56)上安装mha_manager
+[root@db56 mha-soft-student]# rpm -qa | grep -i perl-cpan			#查看依赖包是否安装
+[root@db56 mha-soft-student]# yum  -y install perl-CPAN*
+[root@db56 mha-soft-student]# tar -xf mha4mysql-manager-0.56.tar.gz
+[root@db56 mha-soft-student]# cd mha4mysql-manager-0.56/
+[root@db56 mha4mysql-manager-0.56]# perl Makefile.PL
+[root@db56 mha4mysql-manager-0.56]# make
+[root@db56 mha4mysql-manager-0.56]# make install
+
+  5、在管理主机manager(db56)创建管理命令（把源码包里的命令拷贝到系统目录下）
+/*
+[root@db56 mha4mysql-manager-0.56]# echo $PATH
+/usr/local/mysql/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin
+*/
+[root@db56 mha4mysql-manager-0.56]# cp -r bin /root/				
+/*
+[root@db56 mha4mysql-manager-0.56]# ls /root/bin/
+masterha_check_repl  masterha_check_status  masterha_manager         masterha_master_switch    masterha_stop
+masterha_check_ssh   masterha_conf_host     masterha_master_monitor  masterha_secondary_check
+*/
+/*
+	安装 manager 软件包 后产生的命令
+		命令			作用
+	masterha_check_ssh 	检查 MHA 的 SSH 配置状况
+	masterha_check_repl 	检查 MySQL 复制状况
+	masterha_manger 		启动 MHA
+	masterha_check_status 	检测 MHA 运行状态
+	masterha_master_monitor 检测 master 是否宕机
+*/
+
+
+  6、在所有数据库服务器上禁用自动删除中继日志文件
+[root@db51 ~]# mysql -uroot -p123456 -e 'set global relay_log_purge=off;'
+[root@db51 ~]# mysql -uroot -p123456 -e 'show variables like "relay_log_purge";'
++-----------------+-------+
+| Variable_name   | Value |
++-----------------+-------+
+| relay_log_purge | OFF   |
++-----------------+-------+
+
+  7、在管理主机manager(db56)创建管理服务的主配置文件
+[root@db56 mha4mysql-manager-0.56]# mkdir /etc/mha_manager
+[root@db56 mha4mysql-manager-0.56]# cp samples/conf/app1.cnf /etc/mha_manager/
+[root@db56 mha4mysql-manager-0.56]# vim /etc/mha_manager/app1.cnf
+100dd
+[server default]
+manager_workdir=/etc/mha_manager
+manager_log=/etc/mha_manager/manager.log
+master_ip_failover_script=/etc/mha_manager/master_ip_failover		#自动failover 时候的切换脚本
+
+ssh_user=root			#ssh连接时使用的用户，因无密码验证，所以需要配置无密码验证
+ssh_port=22			#ssh连接时使用的端口号
+
+repl_user=repluser		#主从同步用户名
+repl_password=123456		#主从同步密码
+
+user=root			#连接数据库服务器用户名
+password=123456			#连接数据库服务器用户密码
+
+[server1]			#数据库服务器名字
+hostname=192.168.4.51
+port=3306
+candidate_master=1		#设置为候选 master
+
+[server2]
+hostname=192.168.4.52
+port=3306
+candidate_master=1		#设置为候选 master
+... ...
+[server4]
+hostname=192.168.4.54
+port=3306
+no_master=1			#不竞选 master
+... ...
+
+  8、根据配置文件设置，在对应数据库上有相应的授权用户（主库db51与候选主库db52，db53）
+]# mysql -uroot -p123456 -e "GRANT REPLICATION SLAVE ON *.* TO 'repluser'@'%' identified bu '123456';"
+]# mysql -uroot -p123456 -e "show grants for repluser@'%';"
+]# mysql -uroot -p123456 -e "show grants for root@'%';"
+
+  9、把自动failover 时候的切换脚本拷贝到配置文件指定的目录下
+[root@db56 mha-soft-student]# cp master_ip_failover /etc/mha_manager/
+[root@db56 mha-soft-student]# chmod +x /etc/mha_manager/master_ip_failover 
+[root@db56 mha-soft-student]# ls /etc/mha_manager/master_ip_failover
+[root@db56 mha-soft-student]# vim /etc/mha_manager/master_ip_failover	#添加35-38行这块
+ 28 my (
+... ...
+ 33 );
+ 34 
+ 35 my $vip = '192.168.4.100/24';  # Virtual IP 
+ 36 my $key = "1";
+ 37 my $ssh_start_vip = "/sbin/ifconfig eth0:$key $vip";
+ 38 my $ssh_stop_vip = "/sbin/ifconfig eth0:$key down";
+ 39 
+ 40 GetOptions(
+)... ...
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+测试集群配置
+  1、测试 ssh 密钥对认证登陆
+    在管理节点上 通过 master_check_ssh 做 ssh 检查
+]# /usr/local/bin/masterha_check_ssh --conf= 管理节点主机主配置文件
+[root@db56 ~]# masterha_check_ssh  --conf=/etc/mha_manager/app1.cnf
+... ...
+Wed Sep 19 14:09:41 2018 - [debug]  Connecting via SSH from root@192.168.4.55(192.168.4.55:22) to root@192.168.4.54(192.168.4.54:22)..
+Wed Sep 19 14:09:42 2018 - [debug]   ok.
+Wed Sep 19 14:09:43 2018 - [info] All SSH connection tests passed successfully.
+
+[root@db56 ~]# masterha_check_repl --conf=/etc/mha_manager/app1.cnf
+... ...
+Wed Sep 19 14:51:39 2018 - [info]  OK.
+Wed Sep 19 14:51:39 2018 - [warning] shutdown_script is not defined.
+Wed Sep 19 14:51:39 2018 - [info] Got exit code 0 (Not master dead).
+
+MySQL Replication Health is OK.
+
+  2、启动MHA_Manager管理服务
+     开启 MHA Manager 监控
+	– masterha_manager 	#启动命令
+	– --remove_dead_master_conf 	#不在 app1.cnf 文件里删除宕机的主库的信息
+	– --ignore_last_failover 	#忽略 .health 文件
+[root@db56 ~]# masterha_manager --conf=/etc/mha_manager/app1.cnf		#启动
+[root@db56 ~]# masterha_stop --conf=/etc/mha_manager/app1.cnf			#停止
+Stopped app1 successfully.
+[root@db56 ~]# masterha_manager --conf=/etc/mha_manager/app1.cnf  --remove_dead_master_conf --ignore_last_failover
+[root@db56 ~]# masterha_check_status --conf=/etc/mha_manager/app1.cnf		#查看状态信息
+app1 (pid:7231) is running(0:PING_OK), master:192.168.4.51
+
+  3、客户端连接VIP地址192.168.4.100访问数据库服务
+[root@db50 ~]# mysql -uadmin -p123456 -h192.168.4.100
+mysql> show databases;
+mysql> show grants;
+mysql> use gamedb;
+mysql> show tables;
+mysql> select * from t1;
+mysql> insert into t1 values(888);
+mysql> insert into t1 values(888);
+mysql> insert into t1 values(888);
+
+  4、在所有从库本机都能查看到数据
+]# mysql -uroot -p123456 -e "select * from gamedb.t1;"
+
+  5、测试高可用功能
+
+1>停止主库服务
+[root@db51 ~]# systemctl stop mysqld
+[root@db51 ~]# ifconfig eth0:1					#没有vip IP地址了
+eth0:1: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        ether 52:54:00:91:68:0e  txqueuelen 1000  (Ethernet)
+
+2>在管理主机上查看管理服务状态
+[root@db56 ~]# masterha_check_status --conf=/etc/mha_manager/app1.cnf	#管理主机会自动停止
+app1 is stopped(2:NOT_RUNNING).
+
+3>在2个备用的主库上查看VIP地址（谁有VIP谁就是新的主库）
+]# ifconfig eth0:1
+eth0:1: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 192.168.4.100  netmask 255.255.255.0  broadcast 192.168.4.255
+        ether 52:54:00:54:73:b5  txqueuelen 1000  (Ethernet)
+
+4>剩下的从数据库服务器，会自动做当前主库的从库（查看主库IP地址）
+]# mysql -uroot -p123456 -e "show slave status\G"  | egrep -i '(yes|host)'
+
+5>客户端连接VIP地址192.168.4.100访问数据库服务,依然可以看到先前存储的数据和存储新数据
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+恢复宕机的服务器
+
+  1、把宕机的主机51添加到已有的MHA集群里
+
+1> 启动主机51上的数据库服务
+[root@db51 ~]# systemctl start mysqld
+[root@db51 ~]# mysql -uroot -p123456
+mysql> show master status;
+mysql> show slave status\G;
+Empty set (0.00 sec)
+
+2> 把51主机配置为当前主库52的从库
+mysql> change master to master_host="192.168.4.52",
+    -> master_user="repluser",
+    -> master_password="123456",
+    -> master_log_file="db52.000005",
+    -> master_log_pos=154;
+mysql> start slave;
+mysql> show slave status\G;
+
+  2、把宕机期间写入数据的数据导入主机51里面
+
+  3、修改管理主机56的app1.cnf添加主机51的信息
+vim /etc/mha_manager/app1.cnf
+... ...
+[server1]
+candidate_master=1
+hostname=192.168.4.51
+port=3306
+... ...
+
+  4、启动管理服务
+[root@db56 ~]# masterha_manager --conf=/etc/mha_manager/app1.cnf  --remove_dead_master_conf --ignore_last_failover
+[root@db56 ~]# masterha_check_status --conf=/etc/mha_manager/app1.cnf
+app1 (pid:9070) is running(0:PING_OK), master:192.168.4.52
+
+

@@ -1,0 +1,106 @@
+#!/bin/bash
+
+#数据管理
+    数据导入：把系统文件内容存储到数据库服务器的表里
+    	      系统文件内容不可以杂乱无章，必须有已定格式
+
+
+例：把/etc/passwd文件导入数据库
+#创建表：
+mysql> create table user(
+    -> name char(30),
+    -> password char(1),
+    -> uid int(2),
+    -> gid int(2),
+    -> comment char(150),
+    -> homedir char(150),
+    -> shell  char(30),
+    -> index(name)
+    -> );
+#查看默认使用目录及目录是否存在
+mysql> show variables like "secure_file_priv"
++------------------+-----------------------+
+| Variable_name    | Value                 |
++------------------+-----------------------+
+| secure_file_priv | /var/lib/mysql-files/ |
++------------------+-----------------------+
+mysql>quit
+cp /etc/passwd /var/lib/mysql-files/
+或
+mysql> system cp  /etc/passwd  /var/lib/mysql-files/
+mysql> system ls  /var/lib/mysql-files/
+#修改默认使用目录
+mkdir  /myload ; chown mysql /myload
+vim /etc/my.cnf
+...
+[mysqld]
+secure_file_priv="/myload"
+...
+systemctl restart mysqld
+
+#数据导入（使用默认目录，未进行更改）
+基本用法：
+mysql> load data infile "目录名/文件名"
+    -> into table 库名.表名
+    -> fields terminated by "列分隔符"
+    -> lines terminated by "行分隔符（一般就是\n）";
+注意事项：
+    --字段分隔符要与文件内的一致
+    --指定导入文件的绝对路径
+    --导入数据的表字段类型要与文件字段匹配
+    --禁用selinux保护机制
+例：
+mysql> load data infile "/var/lib/mysql-files/passwd"
+    -> into table user
+    -> fields terminated by ":"
+    -> lines terminated by "\n";
+
+#数据导出
+mysql> SQL查询
+    -> into outfile "目录名/文件名" 
+    -> fields terminated by "列分隔符"
+    -> lines terminated by "行分隔符";
+例：
+mysql> mysql> select * from user			#SQL查询
+    -> into outfile "/var/lib/mysql-files/user.txt"	#指定导出后的文件名
+    -> fields terminated by "|"		#指定列分隔符
+    -> lines terminated by "\n";	#不写的默认使用\n
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

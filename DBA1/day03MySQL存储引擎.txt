@@ -1,0 +1,185 @@
+#!/bin/bash
+#MySQL存储引擎
+    作为可插拔式的组件提供
+  	MYSQL服务软件自带的功能程序，处理表的处理器
+  	不同的存储引擎有不同的功能和数据存储方式
+    默认的存储引擎
+	MySQL 5.0/5.1  -->  MyISAM
+	MySQL 5.5/5.6  -->  InnoDB
+
+  #列出可用的存储引擎类型
+	mysql> show engines;或mysql> show engines\G;
+
+   引擎类型		默认	                描述						     事务
++--------------------+---------+----------------------------------------------------------------+--------------+------+------------+
+| Engine             | Support | Comment                                                        | Transactions | XA   | Savepoints |
++--------------------+---------+----------------------------------------------------------------+--------------+------+------------+
+| InnoDB             | DEFAULT | Supports transactions, row-level locking, and foreign keys     | YES          | YES  | YES        |
+| MRG_MYISAM         | YES     | Collection of identical MyISAM tables                          | NO           | NO   | NO         |
+| MEMORY             | YES     | Hash based, stored in memory, useful for temporary tables      | NO           | NO   | NO         |
+| BLACKHOLE          | YES     | /dev/null storage engine (anything you write to it disappears) | NO           | NO   | NO         |
+| MyISAM             | YES     | MyISAM storage engine                                          | NO           | NO   | NO         |
+| CSV                | YES     | CSV storage engine                                             | NO           | NO   | NO         |
+| ARCHIVE            | YES     | Archive storage engine                                         | NO           | NO   | NO         |
+| PERFORMANCE_SCHEMA | YES     | Performance Schema                                             | NO           | NO   | NO         |
+| FEDERATED          | NO      | Federated MySQL storage engine                                 | NULL         | NULL | NULL       |
++--------------------+---------+----------------------------------------------------------------+--------------+------+------------+
+
+
+  #设置默认存储引擎
+	systemctl stop mysqld
+	vim /etc/my.cnf
+	......
+	[mysqld]
+	default-storage-engine=myisam
+	......
+	systemctl start mysqld
+	mysql -uroot -p123qqq...A
+	mysql> show engines;
+
++--------------------+---------+----------------------------------------------------------------+--------------+------+------------+
+| Engine             | Support | Comment                                                        | Transactions | XA   | Savepoints |
++--------------------+---------+----------------------------------------------------------------+--------------+------+------------+
+| InnoDB             | YES     | Supports transactions, row-level locking, and foreign keys     | YES          | YES  | YES        |
+| MRG_MYISAM         | YES     | Collection of identical MyISAM tables                          | NO           | NO   | NO         |
+| MEMORY             | YES     | Hash based, stored in memory, useful for temporary tables      | NO           | NO   | NO         |
+| BLACKHOLE          | YES     | /dev/null storage engine (anything you write to it disappears) | NO           | NO   | NO         |
+| MyISAM             | DEFAULT | MyISAM storage engine                                          | NO           | NO   | NO         |
+| CSV                | YES     | CSV storage engine                                             | NO           | NO   | NO         |
+| ARCHIVE            | YES     | Archive storage engine                                         | NO           | NO   | NO         |
+| PERFORMANCE_SCHEMA | YES     | Performance Schema                                             | NO           | NO   | NO         |
+| FEDERATED          | NO      | Federated MySQL storage engine                                 | NULL         | NULL | NULL       |
++--------------------+---------+----------------------------------------------------------------+--------------+------+------------+
+
+  #MyISAM存储引擎的特点
+  	--支持表级锁 
+  	--不支持事务、事务回滚、外键
+    MyISAM存储引擎的存储文件，每个MISAN表都有下列3个存储文件（独享表空间）
+  	--表名.frm:存储表结结构
+  	--表名.MYI:存储表的索引信息
+  	--表名.NYD:存储数据
+
+  #InnoDB存储引擎的特点
+  	--支持事务transactions：一次SQL操作从开始建立连接，执行各种sql命令到断开连接的过程
+  	--支持事务回滚：事务执行时，任意一步操作没有成功，会恢复之前的所有操作
+  	--支持行级锁row-level locking：在有客户访问表时，锁定访问的当前行
+  	--支持外键foreign keys:
+    InnoDB存储引擎的存储文件，每个InnoDB表都有下列2个存储文件
+  	--表名.frm:存储表结结构
+  	--表名.ibd:存储索引和数据
+    事物日志文件
+  	--ibdata1
+  	--ib_logfile0
+  	--ib_logfile1
+
+  #MEMORY存储引擎
+  	--存储在内存中
+  	--重启后消失
+
+  #指定存储引擎
+	mysql> create table 表名(。。。)engine=memory;
+  #修改存储引擎
+	mysql> alter table 表名 engine=innodb;
+
+#MySQL锁机制
+    锁粒度：
+  	--表级锁：一次直接对整张表进行加锁
+  	--行级锁：只锁定某一行
+  	--页级锁：对整个页面（MySQL管理数据的基本存储单位）进行加锁（页：内存的数据，1M=1页）
+    锁类型：
+  	--读锁（共享锁）：支持并发读
+  	--写锁（互斥锁、排它锁）：是独占锁，上锁期间其他线程不能读表或写表
+    
+    查看当前的锁状态
+	--检查Table_lock开头的变量，%作通配符
+	mysql> show status like '%lock%';
+
++------------------------------------------+-------+
+| Variable_name                            | Value |
++------------------------------------------+-------+
+| Com_lock_tables                          | 0     |
+| Com_unlock_tables                        | 0     |
+| Handler_external_lock                    | 4     |
+| Innodb_row_lock_current_waits            | 0     |
+| Innodb_row_lock_time                     | 0     |
+| Innodb_row_lock_time_avg                 | 0     |
+| Innodb_row_lock_time_max                 | 0     |
+| Innodb_row_lock_waits                    | 0     |
+| Key_blocks_not_flushed                   | 0     |
+| Key_blocks_unused                        | 6695  |
+| Key_blocks_used                          | 3     |
+| Locked_connects                          | 0     |
+| Performance_schema_locker_lost           | 0     |
+| Performance_schema_metadata_lock_lost    | 0     |
+| Performance_schema_rwlock_classes_lost   | 0     |
+| Performance_schema_rwlock_instances_lost | 0     |
+| Performance_schema_table_lock_stat_lost  | 0     |
+| Qcache_free_blocks                       | 1     |
+| Qcache_total_blocks                      | 1     |
+| Table_locks_immediate                    | 101   |
+| Table_locks_waited                       | 0     |  #表等待
++------------------------------------------+-------+
+
+#事务特性（ACID）
+  Atomic:原子性
+	--事务的整个操作是一个整体，不可分割，要么全部成功，要么全部失败
+  Consistency:一致性
+	--事务操作的前后，表中的记录没有变化
+  Isolation:隔离性
+	--事务的操作是相互隔离不受影响的
+  Durability:持久性
+	--数据一旦提交，不可改变，永久改变表数据
+
+  查看提交状态
+	mysql> show variables like "autocommit";
++---------------+-------+
+| Variable_name | Value |
++---------------+-------+
+| autocommit    | ON    |
++---------------+-------+
+  关闭自动提交
+	mysql> set autocommit=off;
+	mysql> show variables like "autocommit";
++---------------+-------+
+| Variable_name | Value |
++---------------+-------+
+| autocommit    | OFF   |
++---------------+-------+
+  提交数据
+	mysql> commit;
+  数据回滚
+	mysql> rollback;
+
+
+#存储引擎的选择
+  写操作多的适合使用innodb存储引擎，这样并发访问量大		insert  update  delete
+  读操作多的适合使用myisam存储引擎，这样性能好,节省系统资源	select
+
+############################################################################################################
+
+总结：
+搭建mysql数据库服务
+建表：数据类型  约束条件  键值  存储引擎  修改表结构
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

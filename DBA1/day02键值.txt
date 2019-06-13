@@ -1,0 +1,350 @@
+#!/bin/bash
+
+#mysql键值
+设置在表中字段上的，作用是约束如何给字段赋值。同时会给字段做索引。
+     索引介绍：对记录集的多个字段进行排序的方法，树状目录结构  类似与书的“目录”
+	类型：Btree、B+tree、hash
+	优点：加快查询表记录的速度
+	缺点 : 会减慢编辑表记录的速度，且占用磁盘的物理存储空间
+          (delete  insert   update)
+	修正内容时，修改内容 添加内容  删除内容          
+     键值：普通索引index   唯一索引unique  全文索引fulltext  主键primary key  外键foreign key
+#普通索引的使用（index）
+     使用规则
+	查看
+	--desc  表名;
+	--show   index  from   表名;
+	  Table: t2
+	  Key_name: aaa
+	  Column_name: age
+	  Index_type: BTREE  (二叉树)
+	创建
+	在已有表创建
+	--create   index   索引名  on   表名（字段名）；
+	建表是时创建
+	--create  table  表名（
+	--字段列表，
+	--index(字段名)，
+	--index(字段名)，
+	--）;
+	删除
+	--drop   index   索引名  on   表名；
+
+例：
+查看索引
+desc   studb.t2;
+show  index  from studb.t2;
+在已有表创建索引
+create  index    aaa     on    studb.t2(age);
+desc   studb.t2;
+mysql> show   index  from  studb.t2\G;
+Key_name: aaa           #索引名
+Column_name: age    #字段名
+Index_type: BTREE (二叉树)    Hash     #索引类型
+建表时创建索引
+create  table   studb.t21(
+classroom   char(7)    default   "nsd1801",
+name          char(5)  not   null  ,
+age             tinyint(2)  unsigned  zerofill  default   18,
+sex              enum("boy","girl")  not  null  default  "boy",
+index(name),
+index(age),
+index(classroom)
+);
+desc  studb.t21;
+show  index  from  studb.t21\G;
+删除索引
+mysql> drop  index  aaa on  t2;
+mysql>  desc   t2;
+mysql>  show  index  from  t2;
+
+#primary  key 主键
+
+#-注意事项
+#-一个表中只能有一个primary key 字段
+#-对应的字段值不允许重复，且不允许赋NULL值
+#-如果有多个字段都作为PRINARY KEY，称为复合主键，必须一起创建
+#-主键字段的KEY标志时PRI
+#-通常与AUTO——INCREMENT连用
+#-经常把表中能够唯一标识记录的字段设置为主键字段【记录编号字段】
+
+
+#(1)建表时创建主键
+create table t28(						
+name  char (10)  primary key,
+age  int(2)
+);									#方法一
+
+desc  t28;								#查看
+
+create table t29(						
+name char(10),
+age  int(2),
+primary key(name)
+);									#方法二
+
+desc t29;								#查看
+
+#写入测试
+mysql> insert into t29 values(null,21);
+ERROR 1048 (23000): Column 'name' cannot be null		#不允许赋予空值
+mysql> insert into t29 values("tom",21);
+Query OK, 1 row affected (0.08 sec)				#赋值成功
+mysql> insert into t29 values("tom",29);
+ERROR 1062 (23000): Duplicate entry 'tom' for key 'PRIMARY'	#赋值重复，报错
+mysql> insert into t29 values("bob",21);
+Query OK, 1 row affected (0.08 sec)				#赋值成功
+
+#(2)在已有表中添加主键
+alter  table t5 add primary key(name);			#把t5表中的name段设为主键
+
+show index from t5\G;						#查看t5表的键值信息
+
+#(3)复合主键：表中多个字段作主键，做主键字段的值不允许同时重复
+create table jfb(
+name char(10),
+stu_id int(1),
+pay  enum("yes","no"),
+primary key(name,stu_id)
+);
+
+ql> desc jfb;							#查看表
++--------+------------------+------+-----+---------+-------+
+| Field  | Type             | Null | Key | Default | Extra |
++--------+------------------+------+-----+---------+-------+
+| name   | char(10)         | NO   | PRI | NULL    |       |
+| stu_id | int(1)           | NO   | PRI | NULL    |       |
+| pay    | enum('yes','no') | YES  |     | NULL    |       |
++--------+------------------+------+-----+---------+-------+
+
+#写入测试
+mysql> insert  into jfb values("bob",1,"yes"); 			 #赋值成功
+Query OK, 1 row affected (0.13 sec)
+mysql> insert  into jfb values("bob",1,"no");			 #name与id同时重复时，不允许赋值
+ERROR 1062 (23000): Duplicate entry 'bob-1' for key 'PRIMARY'
+mysql> insert  into jfb values("bob",2,"no");			 #name相同，id不同时，赋值成功
+Query OK, 1 row affected (0.07 sec)
+mysql> insert  into jfb values("lucy",2,"no");			 #name不同，id相同时，赋值成功
+Query OK, 1 row affected (0.11 sec)
+mysql> insert  into jfb values(null,null,"no");			 #主键不能赋予空值
+ERROR 1048 (23000): Column 'name' cannot be null
+
+mysql> select * from jfb;					#查看表
++------+--------+------+
+| name | stu_id | pay  |
++------+--------+------+
+| bob  |      1 | yes  |
+| bob  |      2 | no   |
+| lucy |      2 | no   |
++------+--------+------+
+
+#(4)删除主键
+mysql> alter table jfb drop primary key;     	#删除主键，无论时单主键还是复合主键，都是一样的，必须同时删除
+
+mysql> desc jfb;						#查看表
++--------+------------------+------+-----+---------+-------+
+| Field  | Type             | Null | Key | Default | Extra |
++--------+------------------+------+-----+---------+-------+
+| name   | char(10)         | NO   |     | NULL    |       |
+| stu_id | int(1)           | NO   |     | NULL    |       |
+| pay    | enum('yes','no') | YES  |     | NULL    |       |
++--------+------------------+------+-----+---------+-------+
+
+#(5)在已有表中添加复合主键（前提是表中没有违反主键规则的存在）
+alter  table jfb add primary key(name,stu_id);                   #把jfb表中的name,stu_id字段设为复合主键
+
+#(6)primary key通常与AUTO——INCREMENT连用,实现字段值的自动增长，让字段值自加1
+create table t221(
+id int(1) primary key auto_increment,
+age tinyint(1) unsigned,
+class char(7)
+);									#创建表
+mysql> desc t221;							#查看表
++-------+---------------------+------+-----+---------+----------------+
+| Field | Type                | Null | Key | Default | Extra          |
++-------+---------------------+------+-----+---------+----------------+
+| id    | int(1)              | NO   | PRI | NULL    | auto_increment |
+| age   | tinyint(1) unsigned | YES  |     | NULL    |                |
+| class | char(7)             | YES  |     | NULL    |                |
++-------+---------------------+------+-----+---------+----------------+
+
+#测试写入  实现id自动增长的功能
+mysql> insert  into t221(age,class) values(12,"1806");
+mysql> insert  into t221(age,class) values(82,"1807");
+mysql> insert  into t221(age,class) values(82,"1807");
+mysql> insert  into t221(age,class) values(12,"1806");
+mysql> insert  into t221(age,class) values(82,"1807");
+mysql> insert  into t221(age,class) values(12,"1806");
+mysql> select * from t221;
++----+------+-------+
+| id | age  | class |
++----+------+-------+
+|  1 |   12 | 1806  |
+|  2 |   82 | 1807  |
+|  3 |   82 | 1807  |
+|  4 |   12 | 1806  |
+|  5 |   82 | 1807  |
+|  6 |   12 | 1806  |
++----+------+-------+
+
+##############################################################################################
+
+#foreigon key 外键：让当前表字段的值在另一个表中字段值的范围内选择
+#  给当前表中字段赋值时，值只能在其他表的指定字段值的范围里选择。
+#  作用：限制如何给字段赋值的
+
+#使用外键的条件
+#-表的存储引擎必须是innodb
+#-字段类型要一致
+#-被参照字段必须要是索引类型的一种（primary key）
+create table xfb(
+fname char(10)  primary key,
+pay  float(7,2)  default 28000
+)engine=innodb;
+
+insert into xfb(fname) values("bob");
+insert into xfb(fname) values("tom");
+insert into xfb(fname) values("lucy");
+select * from xfb;
++-------+----------+
+| fname | pay      |
++-------+----------+
+| bob   | 28000.00 |
+| lucy  | 28000.00 |
+| tom   | 28000.00 |
++-------+----------+
+#创建外键
+create table xsb(
+xname  char(10),
+sex  enum("b","g") default "g",
+foreign key(xname)  references xfb(fname)
+on update cascade on delete cascade				#同步更新，同步删除
+)engine=innodb;
+
+mysql> desc xfb;
++-------+------------+------+-----+----------+-------+
+| Field | Type       | Null | Key | Default  | Extra |
++-------+------------+------+-----+----------+-------+
+| fname | char(10)   | NO   | PRI | NULL     |       |
+| pay   | float(7,2) | YES  |     | 28000.00 |       |
++-------+------------+------+-----+----------+-------+
+
+mysql> desc xsb;
++-------+---------------+------+-----+---------+-------+
+| Field | Type          | Null | Key | Default | Extra |
++-------+---------------+------+-----+---------+-------+
+| xname | char(10)      | YES  | MUL | NULL    |       |
+| sex   | enum('b','g') | YES  |     | g       |       |
++-------+---------------+------+-----+---------+-------+
+
+mysql> show create table xsb;
+
+#测试
+mysql> insert into xsb(xname) values("chenglong");
+ERROR 1452 (23000): Cannot add or update a child row: a foreign key constraint fails (`老师库`.`xsb`, CONSTRAINT `xsb_ibfk_1` FOREIGN KEY (`xname`) REFERENCES `xfb` (`fname`) ON DELETE CASCADE ON UPDATE CASCADE)
+mysql> insert into xsb(xname) values("chenglongshabi");
+ERROR 1406 (22001): Data too long for column 'xname' at row 1
+mysql> insert into xsb(xname) values("bob");
+Query OK, 1 row affected (0.07 sec)
+
+mysql> insert into xsb(xname) values("tom");
+Query OK, 1 row affected (0.09 sec)
+
+mysql> insert into xsb(xname) values("lucy");
+Query OK, 1 row affected (0.07 sec)
+
+mysql> insert into xfb(fname) values("chenglong");
+Query OK, 1 row affected (0.06 sec)
+
+mysql> insert into xsb(xname) values("chenglong");
+Query OK, 1 row affected (0.06 sec)
+
+mysql> select * from  xsb;
++-----------+------+
+| xname     | sex  |
++-----------+------+
+| bob       | g    |
+| tom       | g    |
+| lucy      | g    |
+| chenglong | g    |
++-----------+------+
+
+
+#删除外键
+mysql>show create table xsb;
+mysql>alter table xsb drop FOREIGN KEY xsb_ibfk_1;
+mysql> drop table xfb;	#删除被参考表，外键没有删除前，该表无法删除
+mysql> drop table xsb;
+
+#同步更新  on update cascade
+mysql> update xfb set name="tom" where name="bob";
+mysql> select * from xfb;                                                                             +------+----------+
+| name | pay      |
++------+----------+
+| lucy |  2800.00 |
+| tom  | 28800.00 |
++------+----------+
+mysql> select * from xsb;
++-------+------+
+| xname | sex  |
++-------+------+
+| tom   | girl |
+| lucy  | girl |
++-------+------+
+
+#同步删除   on delete cascade	
+mysql> delete from xfb where name="lucy";
+mysql> select * from xfb;
++------+----------+
+| name | pay      |
++------+----------+
+| tom  | 28800.00 |
++------+----------+
+mysql> select * from xsb;
++-------+------+
+| xname | sex  |
++-------+------+
+| tom   | girl |
++-------+------+
+
+#为了防止表中内容重复或空值，把外键字段设置为主键
+mysql> alter table xsb add primary key(xname);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

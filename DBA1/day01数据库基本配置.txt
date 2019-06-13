@@ -1,0 +1,251 @@
+#!/bin/bash
+#数据库服务的基本使用
+    使用初始密码在本机连接数据库服务
+	--mysql   [-h 数据库服务器ip地址]   -u用户名    -p'密码'
+	  ]# grep password /var/log/mysqld.log	#首次登陆密码在安装时随机生成，在错误日志文件里
+	  ]# mysql   -hlocalhost   -uroot   -p'hqToPwaqf5,g!><'	
+    重置本机连接密码
+	--alter  user   root@"localhost"  identified by "123456";
+	  mysql>set global validate_password_policy=0;  #只检查密码的长度
+ 	  mysql>set global validate_password_length=6;  #密码长度不能小于6个字符
+	  mysql>alter  user   root@"localhost"  identified by "123456"; #重新设置root密码为123456
+	  mysql>quit	#退出数据库
+	  ]# mysql   [-hlocalhost]   -uroot   -p123456    #使用新密码登陆数据库
+	--让密码策略永久生效
+	  ]#vim  /etc/my.cnf
+	  [mysqld]
+	  validate_password_policy=0
+	  validate_password_length=6
+	  :wq
+	  ]#systemctl   restart  mysqld
+
+#数据库的基本管理
+     mysql连接工具
+	数据库存储流程：把数据存储在数据库服务器上的过程
+	--连接数据库服务器（命令行   API    图形工具）
+	  ]#mysql   [-h 数据库服务器ip地址]   -u用户名    -p'密码'
+	--建库 （存放数据的文件夹）
+	--建表 （就是文件）
+	--插入记录  （文件中的行）
+	--断开连接
+	  ]# quit 或 exit 退出
+     sql命令使用规则
+	操作指令类型
+	--MySQL指令：环境切换、看状态、退出等控制
+	--SQL指令：数据库定义/查询/操纵/授权语句
+	基本注意事项
+	--操作指令不区分大小写（密码、变量名除外）
+	--每条SQL指令以；结束或者分隔
+	--不支持Tab键自动补齐
+	--\c可废弃当前编写错的操作指令
+     sql命令分类（常用的操作指令）
+	DDL 数据定义语言(create/alter/drop)
+	DML 数据操作语言(insert/update/delete)
+	DTL 数据控制语言(grant/revoke)
+	DCL 数据事务语言(commit/rollback/savepoint)
+		
+#数据库的基本操作
+     库管理命令：库 类似于系统的文件夹
+	--show databases;		#显示已有的库
+	--use 库名;			#切换库
+	--select database();		#显示当前所在的库
+	--create database 库名;		#创建新库
+	--drop database 库名;		#删除库
+     数据库的命名规则
+	--可以使用数字/字母/下划线，但不能纯数字
+	--区分大小写，具有唯一性
+	--不可使用指令关键子、特殊字符
+     表管理命令：表 类似于系统的文件
+	--show tables;			#显示已有的表
+	--desc    库名.表名;		#查看表结构
+	--drop  table   库名.表名;	#删除表
+	新建指定名称的表
+	--create   table  库名.表名（
+	--字段名   类型（宽度）  约束条件，
+	--字段名   类型（宽度）  约束条件，
+	--.....
+	--）;
+     记录管理命令：记录 类似于文件里的行
+	--select  * from 库名.表名;	#查看表记录
+	--insert into 表名 values(值列表);	#插入表记录
+	--update 表名 set 字段=值;		#修改表记录
+	--delete from 表名;			#s删除表记录
+#mysql数据类型
+     常见的信息种类
+	--数值型   （成绩  年龄   工资  ）
+	--字符型   （商品名称   籍贯   姓名   生产厂家）
+	--日期时间型 （注册时间    约会时间   开会时间   入职时间   生日）
+	--枚举型    （插入记录 时 记录的值 在列举的范围内选择，兴趣爱好、性别等）
+     了解字段设置
+	--DESC或DESCRIBE，查看表结构
+	--Field		Type		Null	 key	Default		Extra
+	--字段名	字段类型	是否为空 键值	默认值		描述信息	
+     数值类型：每种类型的存储数据的范围都是固定
+	整数类型 （只能存储整数）
+	--微小整型	小整型        	中整型        	大整型      	极大整型
+	--tinyint	smallint      	MEDIUMINT       INT        	bigint
+	--1字节		2字节		3字节		4字节	  	8字节
+	---128～127	-327768～32767	-2E23～2E23-1	-2E31～2E31-1	-2E3～2E63-1	#有符号范围
+	--0～255	0～65535	0～2E24-1	0～2E32-1	0～2E64-1	#无符号范围
+	--unsigned    使用数值类型有符号的范围
+	浮点型：存储小数
+	--单精度浮点数		双精度浮点数
+	--4字节			8字节
+	--float			double
+	--DECIMAL	对DECIMAL(M,D),其中M为有效位数，D为小数位数，M应大于D，占用M+2字节
+	  定义格式
+	--float(M,D)		#M为有效位数，D为小数位数
+	--double(M,D)
+	--当字段值与类型不匹配时，字段值作为0处理
+	--数值超出范围时，仅保存最大/最小值
+例：
+create  database  studb;					#
+use   studb;						#
+create  table   t1(level  smallint,age  tinyint);	#
+insert into  t1  values(1024,19),(9,21);		#
+insert into  t1  values(21.45,9.87);			#
+select   * from  t1;					#
+create  table   t2(
+level   int     unsigned, 
+age   tinyint   unsigned
+);								#
+desc   t2;							#
+insert into  t2  values(-201,  -1);			#
+insert into  t2  values(201,  0);			#
+select  * from t2;					#
+create  table   t3(
+pay   float(5,2)  
+);								#
+insert  into  t3  values(124);				#
+insert  into  t3  values(1.24);			#
+insert  into  t3  values(-999.99);			#
+insert  into  t3  values(1000);			#
+select  *  from  t3;					#
+create  table   t4(
+pay   double(7,2)  
+);								#
+      字符类型
+	定长：char(字符数)   固定长度字符类型
+	--最大长度255字符
+	--不够指定字符数时在右边用空格补齐
+	--字符数超出时，无法写入数据
+	--写速度快
+	变长：varchar (字符数)   变长字符类型
+	--最大长度65532字符
+	--按数据实际大小分配存储空间
+	--字符数超出时，无法写入数据
+	--节省空间
+	大文本类型:text/blob （音频文件 视频文件  图片文件）
+	--字符数大于65535存储时使用
+	--一般不使用，直接保存硬盘的连接更好
+例：
+create  table   t5(
+name    char(5),
+addrhome   char(30),
+email   varchar(25)
+);								#
+insert   into  t5  values
+("bob","beijing","bob@163.com"); 			#
+select  * from  t5;					#
+      日期时间类型 （注册时间    约会时间   开会时间   入职时间   生日）
+	年  year   YYYY   2018
+	--占用1个字节
+	--范围：1901～2155
+	--默认用4位表示，可以使用2位数字赋值，规律是01-69 视为20XX，70-99 视为19XX
+	日期   date   YYYYMMDD     20180423
+	--占用4个字节
+	--范围：0001-01-01～9999-12-31
+	时间   time   HHMMSS          161958
+	--占用3个字节
+	日期时间 datetime/timestamp	YYYYMMDDHHMMSS     20180423161958
+	--占用 4个字节/8个字节
+	--范围：1000/1970-01-01 00：00：00.000000～9999/2038-12-31 23：59：59.999999
+	--区别：未赋值时自动赋值为null/当前系统时间
+	获取日期时间函数
+	--now() 获取当期系统的时间
+	--year(日期时间)获取指定时间中的年
+	--month(日期时间)获取指定时间中的月
+	--date(日期时间)获取指定时间中的日期
+	--day(日期时间)获取指定时间中的号（天）
+	--time(日期时间)获取指定时间中的时间
+	--curdate获取当前的系统日期
+	--curtime获取当前的系统时间
+	--sleep(N)休眠N秒
+例：
+create  table  t6(
+name   char(15),
+age      tinyint   unsigned,
+pay      float(7,2),
+email   varchar(30),
+birthday    date,
+up_time     time,
+start_year  year,
+party          datetime
+);									#
+desc   t6;								#
+insert into  t6  values
+("lanyiqun",18,26800,"lyq@tedu.cn",20181001,083000,
+1990,20180501220000);							#
+select   *  from  t6;						#
+mysql> select  now();						#
+mysql> select  year(  now() );					#
+mysql> select  year( 20191120 );				#
+mysql> select  month(  now() );				#
+mysql> select  day(  now() );					#
+mysql> select  date(  now() );					#
+mysql> select  time(  now() );					#
+insert  into  t6  values( "lucy", 21 , 18800, 
+"lucy@tedu.cn" , date( now() ), time(now()) ,  year
+(20111218) , now()  );						#
+insert  into  t6(name,start_year)  values("tom",69);	#
+create  table  t7  (
+meetting   datetime,
+party          timestamp	
+);									#
+desc  t7;								#
+insert into  t7  values( now() , now() );			#
+insert into  t7(party)  values(20161123184518);		#
+insert into  t7(meetting )   values(20201123153000);	#
+select  * from t7;						#
+
+      枚举类型（插入记录 时 记录的值 在列举的范围内选择
+	从给定值集合中选择单个值，enum
+	--格式：enum（值1，值2，。。。值N）
+	从给定值集合中选择1个或多个值，set
+	--格式：set（值1，值2，。。。值N）
+例：
+create  table  t7  (
+meetting   datetime,
+party          timestamp
+);									#
+desc  t7;								#
+insert into  t7  values( now() , now() );			#
+insert into  t7(party)  values(20161123184518);		#
+insert into  t7(meetting )   values(20201123153000);	#
+select  * from t7;						#
+create  table  t8(
+name  char(15),
+sex      enum("boy","girl","no"),
+likes    set("woman","game","money","flim","eat")
+);									#
+desc   t8;								#
+insert into t8  values
+("guoxuehao","boy","game,flim,eat");				#
+insert into t8  values("xierongyue",  3  ,"money,eat");	#
+select   * from  t8;						#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

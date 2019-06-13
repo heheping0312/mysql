@@ -1,0 +1,144 @@
+#!/bin/bash
+
+mysql读写分离
+  读写分离的原理
+     多台 MySQL 服务器 
+       – 分别提供读、写服务,均衡流量
+       – 通过主从复制保持数据一致性
+     由MySQL 代理面向客户端
+	– 收到 SQL 写请求时,交给服务器 A 处理
+	– 收到 SQL 读请求时,交给服务器 B 处理
+	– 具体区分策略由服务设置
+
+构建读写分离
+  1>基本构建思路
+     	1. 已搭建好 MySQL 主从复制
+	– 基于上一个实验的结果
+	– 其中 Slave 为只读
+	2. 添加一台 MySQL 代理服务器
+	– 部署 / 启用 maxscale
+	3. 客户端通过代理主机访问 MySQL 数据库
+	– 访问代理服务器
+
+  2>部署 MySQL 代理
+     安装 maxscale
+	– MaxScale 是 Mysql 的兄弟公司 MariaDB 开发的
+	– 下载地址 https://downloads.mariadb.com/files/MaxScale
+	– 主配置文件 /etc/maxscale.cnf
+
+在主机50上装包
+[root@db50 ~]# yum -y install maxscale-2.1.2-1.rhel.7.x86_64.rpm  libev-4.15-1.el6.rf.x86_64.rpm
+
+  3>修改配置文文件
+......
+[maxscale]
+threads=auto		#进程数
+......
+[server1] 		#定义数据库服务器主机名
+type=server
+address=192.168.4.51 	#master 主机 ip 地址
+port=3306
+protocol=MySQLBackend
+
+[server2] 		#定义数据库服务器
+type=server
+address=192.168.4.52 	#slave 主机 ip 地址
+port=3306
+protocol=MySQLBackend
+......
+[MySQL Monitor] 	#定义要监视的数据库服务器,监视服务是否启动，监视主从是否正常
+type=monitor
+module=mysqlmon
+servers=server1,server2 #定义的主、从数据库服务器主机名
+user=scalemon 		#用户名，监视服务器的用户
+passwd=123qqq...A	#密码
+monitor_interval=10000
+......
+注释掉只读服务器[Read-Only Service]那一块，不指定只读服务器
+......
+[Read-Write Service] 	#定义实现读写分离的数据库服务器
+type=service
+router=readwritesplit
+servers=server1,server2 #定义的主、从数据库服务器主机名
+user=scaleuser 		#用户名   路由用户，查看登陆用户是否属实的用户
+passwd=123qqq...A	#密码
+max_slave_connections=100%
+......
+注释掉只读服务监听的[Read-Only Listener]那一块
+......
+ 97 [MaxAdmin Listener]	#管理服务
+ 98 type=listener
+ 99 service=MaxAdmin Service
+100 protocol=maxscaled
+101 socket=defaut	
+102 port=4016		#服务监听端口，默认4009
+
+
+  4>在主、从数据库服务器创建授权用户(主库上授权用户，从库上会自动同步）
+
+mysql> grant replication slave, replication client on *.* to scalemon@'%' identified by "123qqq...A";   #创建监控用户
+mysql> grant select on mysql.* to scaleuser@'%' identified by "123qqq...A"; 			#创建路由用户
+mysql> grant select,insert on dba2.* to admina@'%' identified by "123qqq...A"; 			#创建访问数据用户
+
+  5>启动 maxscale
+      主要命令:
+	– 启动服务
+	– 查看端口
+	– 停止服务
+
+
+[root@db50 ~]# maxscale -f /etc/maxscale.cnf
+[root@db50 ~]# ss -antupl | grep maxscale
+tcp    LISTEN     0      128      :::4016                 :::*                   users:(("maxscale",pid=4407,fd=12))
+tcp    LISTEN     0      128      :::4006                 :::*                   users:(("maxscale",pid=4407,fd=11))
+[root@db50 ~]# kill -9 4407
+
+
+  6>客户端访问测试
+      连接 MySQL 代理服务器
+	– mysql -h代理的IP地址 -P端口 -u用户名 -p密码
+      在代理本机连接管理端口
+	– maxadmin -uadmin -pmariadb -p 端口
+[root@db50 ~]# maxadmin -uadmin -pmariadb -P4016
+MaxScale> list servers				#只能有一个空格
+Servers.
+-------------------+-----------------+-------+-------------+--------------------
+Server             | Address         | Port  | Connections | Status              
+-------------------+-----------------+-------+-------------+--------------------
+server1            | 192.168.4.51    |  3306 |           0 | Master, Running
+server2            | 192.168.4.52    |  3306 |           0 | Slave, Running
+-------------------+-----------------+-------+-------------+--------------------
+
+      测试 SQL 查询、更新操作
+	– 可成功查询表记录
+	– 可成功写入数据
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,46 @@
+#!/bin/bash
+
+#约束条件
+     作用： 限制如何给字段赋值的
+     包括内容有：  NULL    Key    Default     Extra
+	--Null		允许为空，默认设置
+	--Not Null	不允许为空
+	--key		键值类型：普通索引   唯一索引  全文索引  主键  外 键
+	--Default 	默认值 作用：当不被字段赋值时，使用默认值给字段赋值
+	--Extra    额外设置  ，字段是否设置为自动增加,默认没有自动增长功能
+
+例：
+create  table   t5(
+classroom   char(7)  default   "nsd1801",
+name   char(5)  not   null  ,
+age    tinyint(2)  unsigned  zerofill  default   18,
+sex     enum("boy","girl")  not  null  default  "boy"
+);
+desc  t5;
+insert into  t5(name)values("lucy");
+insert into  t5    values("nsd1802","alice",31,"girl");
+select   *  from   t5;
+
+#修改表结构
+     修改表结构的命令
+	alter  table  库.表    执行动作 ；
+	--添加新字段  	add   字段名    类型(宽度)  [ 约束条件]
+	--删除已有字段	drop  字段名
+	--修改已有字段的类型宽度及约束条件 modify   字段名    类型(宽度)  [ 约束条件] 	#修改时不能与已经存储的数据矛盾,不然的话不允许修改
+	--修改字段名	change  源字段名   新字段名   类型(宽度)  [ 约束条件]
+	--修改表名	alter  table  源表名  rename   [to]   新表名；
+
+例：
+alter  table   studb.t1   add   name   char(15)  first ;
+alter  table   studb.t1   add   addrhome   varchar(50)  default  "beijing";
+alter  table   studb.t1   add   sex   enum("boy","girl") not null  default "boy"  after   name;
+desc  studb.t1;
+select  * from  studb1;
+mysql> alter  table   studb.t1   drop sex  ,   drop name;
+mysql> alter table  t1  modify  addrhome char(10) default "beijing";
+mysql> alter table   t1  modify level smallint(6) not null;
+mysql> alter table t1 modify age tinyint(4) first;
+mysql> alter table  t1  change addrhome  home char(10) default "beijing";
+mysql> alter table  t1   rename    dogperson;
+
+
